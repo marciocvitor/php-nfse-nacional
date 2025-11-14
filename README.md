@@ -37,6 +37,8 @@ composer install
 
 ## Uso Básico
 
+### Emissão Individual (Síncrona)\n
+
 ```php
 <?php
 
@@ -87,6 +89,8 @@ if ($response->sucesso) {
 
 ---
 
+
+---\n\n### Envio em Lote (Assíncrono)\n\nPara enviar múltiplas DPS de uma vez:\n\n```php\n// Criar múltiplas DPS\n$listaDps = [$dps1->getXML(), $dps2->getXML(), $dps3->getXML()];\n\n// Enviar lote (até 50 DPS)\n$response = $tools->enviarLoteDps($listaDps, 'LOTE001');\n$protocolo = $response->dados['protocolo'];\n\n// Aguardar processamento\nsleep(5);\n\n// Consultar resultado\n$resultado = $tools->consultarLote($protocolo);\necho "NFSes geradas: " . count($resultado->dados['nfses']) . "\\n";\n```\n\n**Documentação completa:** [MANUAL-LOTE.md](MANUAL-LOTE.md)\n
 ## Requisitos
 
 - PHP >= 8.2
@@ -137,7 +141,9 @@ php-nfse-nacional/
 - [x] Suporte a certificado A1
 - [x] Ambientes: Homologação e Produção
 - [ ] Geração de PDF (DANFSe) - Em desenvolvimento
-- [ ] Envio em lote - Em desenvolvimento
+- [x] Envio em lote (até 50 DPS)
+[x] Consulta de lote por protocolo
+[x] Consulta por NSU
 - [ ] Assinatura digital completa - Em desenvolvimento
 
 ---
