@@ -1,15 +1,22 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NFSeNacional\Make;
 
 use DOMDocument;
 
+/**
+ * Classe para geração de XML da DPS/RPS (NFSe)
+ * 
+ * @package NFSeNacional\Make
+ */
 class Make
 {
-    protected $dom;
-    protected $prestador = [];
-    protected $tomador = [];
-    protected $servico = [];
+    private DOMDocument $dom;
+    private array $prestador = [];
+    private array $tomador = [];
+    private array $servico = [];
     
     public function __construct()
     {
@@ -49,14 +56,18 @@ class Make
         $infDps->setAttribute('Id', 'DPS' . date('YmdHis'));
         $dps->appendChild($infDps);
         
-        // Adicionar dados (simplificado)
-        $prestador = $this->dom->createElement('Prestador');
-        $infDps->appendChild($prestador);
+        // Adicionar dados do prestador (simplificado)
+        if (!empty($this->prestador)) {
+            $prestador = $this->dom->createElement('Prestador');
+            $infDps->appendChild($prestador);
+            
+            $cpfCnpj = $this->dom->createElement('CpfCnpj');
+            $prestador->appendChild($cpfCnpj);
+            $cpfCnpj->appendChild(
+                $this->dom->createElement('Cnpj', $this->prestador['cnpj'] ?? '')
+            );
+        }
         
-        $cpfCnpj = $this->dom->createElement('CpfCnpj');
-        $prestador->appendChild($cpfCnpj);
-        $cpfCnpj->appendChild($this->dom->createElement('Cnpj', $this->prestador['cnpj'] ?? ''));
-        
-        return $this->dom->saveXML();
+        return $this->dom->saveXML() ?: '';
     }
 }

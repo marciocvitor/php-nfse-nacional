@@ -1,6 +1,10 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Exemplo básico de uso da biblioteca PHP NFSe Nacional
+ * Compatível com PHP 8.2+
  */
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -10,8 +14,8 @@ use NFSeNacional\Tools\Tools;
 use NFSeNacional\Make\Make;
 
 try {
-    // 1. CONFIGURAÇÃO
-    $config = new Config([
+    // 1. CONFIGURAÇÃO (usando named arguments do PHP 8.0+)
+    $config = Config::fromArray([
         'cnpj' => '12345678901234',
         'im' => '123456',
         'cmun' => '3550308', // São Paulo

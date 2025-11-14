@@ -1,22 +1,34 @@
 <?php
 
+declare(strict_types=1);
+
 namespace NFSeNacional\Common;
 
+/**
+ * Classe para padronização de respostas
+ * 
+ * @package NFSeNacional\Common
+ */
 class Response
 {
-    public $sucesso;
-    public $mensagem;
-    public $dados;
-    public $numero;
-    public $codigoVerificacao;
-    public $erros;
+    public function __construct(
+        public bool $sucesso = false,
+        public string $mensagem = '',
+        public array $dados = [],
+        public ?string $numero = null,
+        public ?string $codigoVerificacao = null,
+        public ?string $xml = null,
+        public array $erros = []
+    ) {}
     
-    public function __construct(bool $sucesso = false, string $mensagem = '', array $dados = [])
+    public function addErro(string $mensagem, ?int $codigo = null): self
     {
-        $this->sucesso = $sucesso;
-        $this->mensagem = $mensagem;
-        $this->dados = $dados;
-        $this->erros = [];
+        $this->erros[] = [
+            'mensagem' => $mensagem,
+            'codigo' => $codigo
+        ];
+        
+        return $this;
     }
     
     public function toArray(): array
@@ -25,8 +37,8 @@ class Response
             'sucesso' => $this->sucesso,
             'mensagem' => $this->mensagem,
             'dados' => $this->dados,
-            'numero' => $this->numero ?? null,
-            'codigoVerificacao' => $this->codigoVerificacao ?? null,
+            'numero' => $this->numero,
+            'codigoVerificacao' => $this->codigoVerificacao,
             'erros' => $this->erros
         ];
     }

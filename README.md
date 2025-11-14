@@ -1,7 +1,7 @@
 # PHP NFSe Nacional
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PHP Version](https://img.shields.io/badge/php-%3E%3D7.4-blue.svg)](https://php.net)
+[![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net)
 
 Biblioteca PHP open source para emissão de **Nota Fiscal de Serviço Eletrônica (NFSe)** no **Portal Nacional** seguindo o padrão **ABRASF**.
 
@@ -89,7 +89,7 @@ if ($response->sucesso) {
 
 ## Requisitos
 
-- PHP >= 7.4
+- PHP >= 8.2
 - Extensões PHP:
   - `ext-json`
   - `ext-openssl`
