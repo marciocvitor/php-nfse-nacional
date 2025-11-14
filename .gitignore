@@ -1,0 +1,48 @@
+# Dependencies
+/vendor/
+composer.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+/coverage/
+.phpunit.result.cache
+
+# Certificates (NEVER commit certificates!)
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
+
+# Config files with sensitive data
+config.json
+config.php
+.env
+
+# Logs
+*.log
+/logs/
+
+# Temporary files
+/tmp/
+/temp/
+*.tmp
+
+# NFSe XML files
+/nfse/*.xml
+/dps/*.xml
+/rps/*.xml
+
+# Cache
+/cache/
+*.cache
