@@ -1,4 +1,4 @@
-# PHP NFSe Nacional ������
+# PHP NFSe Nacional
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PHP Version](https://img.shields.io/badge/php-%3E%3D7.4-blue.svg)](https://php.net)
@@ -7,7 +7,7 @@ Biblioteca PHP open source para emissão de **Nota Fiscal de Serviço Eletrônic
 
 ---
 
-## ��� Instalação
+## Instalação
 
 ### Via Composer (Repositório Privado)
 
@@ -18,7 +18,7 @@ Adicione o repositório no seu `composer.json`:
     "repositories": [
         {
             "type": "vcs",
-            "url": "https://github.com/SEU-USUARIO/php-nfse-nacional.git"
+            "url": "https://github.com/marciocvitor/php-nfse-nacional.git"
         }
     ],
     "require": {
@@ -35,7 +35,7 @@ composer install
 
 ---
 
-## ��� Uso Básico
+## Uso Básico
 
 ```php
 <?php
@@ -87,24 +87,90 @@ if ($response->sucesso) {
 
 ---
 
-## ��� Requisitos
+## Requisitos
 
 - PHP >= 7.4
-- Extensões: json, openssl, soap, dom, simplexml, libxml
+- Extensões PHP:
+  - `ext-json`
+  - `ext-openssl`
+  - `ext-soap`
+  - `ext-dom`
+  - `ext-simplexml`
+  - `ext-libxml`
 - Certificado Digital A1 (.pfx)
 
 ---
 
-## ��� Contribuindo
+## Estrutura do Projeto
 
-Contribuições são bem-vindas! Abra issues ou pull requests.
+```
+php-nfse-nacional/
+├── composer.json           # Configuração Composer
+├── README.md              # Documentação
+├── QUICK-START.md         # Guia rápido
+├── INSTALL.md             # Guia completo instalação
+├── LICENSE                # Licença MIT
+├── src/
+│   ├── Config/           # Gerenciamento de configuração
+│   ├── Tools/            # Comunicação com webservice
+│   ├── Make/             # Geração de XML DPS/RPS
+│   └── Common/           # Classes comuns (Response)
+└── examples/
+    └── exemplo_basico.php # Exemplo de uso
+```
 
 ---
 
-## ⚖️ Licença
+## Documentação
 
-MIT License - veja [LICENSE](LICENSE)
+- **[QUICK-START.md](QUICK-START.md)** - Início rápido em 3 passos
+- **[INSTALL.md](INSTALL.md)** - Guia completo de instalação e configuração
+- **[examples/](examples/)** - Exemplos práticos de uso
 
 ---
 
-**Desenvolvido pela comunidade PHP brasileira** ������
+## Funcionalidades
+
+- [x] Emissão de DPS/RPS
+- [x] Consulta de NFSe
+- [x] Cancelamento de NFSe
+- [x] Suporte a certificado A1
+- [x] Ambientes: Homologação e Produção
+- [ ] Geração de PDF (DANFSe) - Em desenvolvimento
+- [ ] Envio em lote - Em desenvolvimento
+- [ ] Assinatura digital completa - Em desenvolvimento
+
+---
+
+## Contribuindo
+
+Contribuições são bem-vindas! Por favor:
+
+1. Faça um Fork do projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/nova-funcionalidade`)
+3. Commit suas mudanças (`git commit -am 'Adiciona nova funcionalidade'`)
+4. Push para a branch (`git push origin feature/nova-funcionalidade`)
+5. Abra um Pull Request
+
+---
+
+## Licença
+
+Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+---
+
+## Suporte
+
+- **Issues:** [GitHub Issues](https://github.com/marciocvitor/php-nfse-nacional/issues)
+- **Documentação:** [Wiki](https://github.com/marciocvitor/php-nfse-nacional)
+
+---
+
+## Aviso Legal
+
+Esta biblioteca é um projeto open source independente e não possui vínculo oficial com o Governo Federal, ABRASF ou qualquer órgão público. Use por sua conta e risco.
+
+---
+
+**Desenvolvido pela comunidade PHP brasileira**

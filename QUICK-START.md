@@ -1,13 +1,13 @@
-# ��� Guia Rápido - php-nfse-nacional
+# Guia Rápido - php-nfse-nacional
 
-## ⚡ 3 Passos para Começar
+## 3 Passos para Começar
 
-### 1️⃣ Subir para GitHub (Privado)
+### Passo 1: Subir para GitHub (Privado)
 
 ```bash
 # 1. Crie repositório em: https://github.com/new
 #    Nome: php-nfse-nacional
-#    Tipo: PRIVADO ✓
+#    Tipo: PRIVADO
 
 # 2. Execute no terminal:
 cd /c/xampp/htdocs/php-nfse-nacional
@@ -16,24 +16,24 @@ git remote add origin https://github.com/SEU-USUARIO/php-nfse-nacional.git
 git push -u origin main
 ```
 
-### 2️⃣ Configurar Token GitHub
+### Passo 2: Configurar Token GitHub
 
 ```bash
 # 1. Crie token em: https://github.com/settings/tokens
-#    Permissão: ✓ repo
+#    Permissão: repo
 
 # 2. Configure no Composer:
 composer config --global github-oauth.github.com SEU_TOKEN_AQUI
 ```
 
-### 3️⃣ Usar no Projeto
+### Passo 3: Usar no Projeto
 
 **composer.json do seu projeto:**
 ```json
 {
     "repositories": [{
         "type": "vcs",
-        "url": "https://github.com/SEU-USUARIO/php-nfse-nacional.git"
+        "url": "https://github.com/marciocvitor/php-nfse-nacional.git"
     }],
     "require": {
         "php-nfse/nfse-nacional": "dev-main"
@@ -45,7 +45,7 @@ composer config --global github-oauth.github.com SEU_TOKEN_AQUI
 composer install
 ```
 
-## ��� Código de Exemplo
+## Código de Exemplo
 
 ```php
 <?php
@@ -63,10 +63,10 @@ $config = new Config([
 $tools = new Tools($config);
 $response = $tools->enviarDps($xml);
 
-echo $response->sucesso ? "✓ Sucesso!" : "✗ Erro";
+echo $response->sucesso ? "Sucesso!" : "Erro";
 ```
 
-## �� Documentação Completa
+## Documentação Completa
 
 - [INSTALL.md](INSTALL.md) - Guia completo de instalação
 - [README.md](README.md) - Documentação do projeto
