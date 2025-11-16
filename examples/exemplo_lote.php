@@ -35,7 +35,16 @@ try {
         'razaosocial' => 'Minha Empresa LTDA',
         'ambiente' => 2,
         'certPfx' => __DIR__ . '/certificado.pfx',
-        'certPassword' => 'senha'
+        'certPassword' => 'senha',
+        'wsdl' => [
+            'homologacao' => [
+                'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
+                'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
+                'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
+                'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
+                'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
+            ]
+        ]
     ]);
     
     $tools = new Tools($config);
@@ -50,7 +59,8 @@ try {
     
     // DPS 1
     $dps1 = new Make();
-    $dps1->setPrestador(['cnpj' => '12345678901234', 'im' => '123456']);
+    $dps1->setIdentificacao(['numero' => '1', 'serie' => 'UNICA', 'tipo' => 1]);
+    $dps1->setPrestador(['cnpj' => '12345678901234', 'im' => '123456', 'razaoSocial' => 'Minha Empresa LTDA']);
     $dps1->setTomador([
         'cpfCnpj' => '11111111111',
         'razaoSocial' => 'Cliente 1',
@@ -62,14 +72,15 @@ try {
         'codigoMunicipio' => '3550308',
         'valorServicos' => 1000.00,
         'valorIss' => 50.00,
-        'aliquota' => 5.00
+        'aliquota' => 0.0500
     ]);
     $listaDps[] = $dps1->getXML();
     echo "  ✓ DPS 1 criada (R$ 1.000,00)\n";
     
     // DPS 2
     $dps2 = new Make();
-    $dps2->setPrestador(['cnpj' => '12345678901234', 'im' => '123456']);
+    $dps2->setIdentificacao(['numero' => '2', 'serie' => 'UNICA', 'tipo' => 1]);
+    $dps2->setPrestador(['cnpj' => '12345678901234', 'im' => '123456', 'razaoSocial' => 'Minha Empresa LTDA']);
     $dps2->setTomador([
         'cpfCnpj' => '22222222222',
         'razaoSocial' => 'Cliente 2',
@@ -81,14 +92,15 @@ try {
         'codigoMunicipio' => '3550308',
         'valorServicos' => 2000.00,
         'valorIss' => 100.00,
-        'aliquota' => 5.00
+        'aliquota' => 0.0500
     ]);
     $listaDps[] = $dps2->getXML();
     echo "  ✓ DPS 2 criada (R$ 2.000,00)\n";
     
     // DPS 3
     $dps3 = new Make();
-    $dps3->setPrestador(['cnpj' => '12345678901234', 'im' => '123456']);
+    $dps3->setIdentificacao(['numero' => '3', 'serie' => 'UNICA', 'tipo' => 1]);
+    $dps3->setPrestador(['cnpj' => '12345678901234', 'im' => '123456', 'razaoSocial' => 'Minha Empresa LTDA']);
     $dps3->setTomador([
         'cpfCnpj' => '33333333333',
         'razaoSocial' => 'Cliente 3',
@@ -100,7 +112,7 @@ try {
         'codigoMunicipio' => '3550308',
         'valorServicos' => 1500.00,
         'valorIss' => 75.00,
-        'aliquota' => 5.00
+        'aliquota' => 0.0500
     ]);
     $listaDps[] = $dps3->getXML();
     echo "  ✓ DPS 3 criada (R$ 1.500,00)\n";
@@ -121,19 +133,20 @@ try {
         throw new Exception("Erro ao enviar lote: " . $response->mensagem);
     }
     
-    $protocolo = $response->dados['protocolo'];
+    $parsedEnvio = $response->dados['parsed'] ?? [];
+    $protocolo = $parsedEnvio['Protocolo'] ?? null;
     echo "  ✓ Lote enviado com sucesso!\n";
     echo "  ✓ Protocolo: {$protocolo}\n";
     echo "  ✓ Número do Lote: {$numeroLote}\n";
-    echo "  ✓ Quantidade: " . $response->dados['quantidadeDps'] . " DPS\n";
+    echo "  ✓ Quantidade: " . ($parsedEnvio['QuantidadeRps'] ?? count($listaDps)) . " DPS\n";
     echo "  ⏳ Processamento em andamento...\n\n";
     
     // ========================================
     // PASSO 4: AGUARDAR PROCESSAMENTO
     // ========================================
-    echo "→ PASSO 4: Aguardando processamento (simulação)...\n";
-    echo "  ⏳ Aguardando 3 segundos...\n";
-    sleep(3);
+    echo "→ PASSO 4: Aguardando processamento...\n";
+    echo "  ⏳ Aguardando 10 segundos antes de consultar (ajuste conforme necessidade)...\n";
+    sleep(10);
     echo "  ✓ Tempo de espera finalizado\n\n";
     
     // ========================================
@@ -148,21 +161,28 @@ try {
     }
     
     echo "  ✓ Lote processado!\n";
-    echo "  ✓ Situação: " . $resultado->dados['situacao'] . "\n";
-    echo "  ✓ Processadas: " . $resultado->dados['quantidadeProcessada'] . "\n";
-    echo "  ✓ Com Sucesso: " . $resultado->dados['quantidadeComSucesso'] . "\n";
-    echo "  ✓ Com Erro: " . $resultado->dados['quantidadeComErro'] . "\n\n";
+    $parsedConsulta = $resultado->dados['parsed'] ?? [];
+    echo "  ✓ Situação: " . ($parsedConsulta['Situacao'] ?? 'Indefinido') . "\n";
+    echo "  ✓ Processadas: " . ($parsedConsulta['QuantidadeProcessada'] ?? '0') . "\n";
+    echo "  ✓ Com Sucesso: " . ($parsedConsulta['QuantidadeAceita'] ?? '0') . "\n";
+    echo "  ✓ Com Erro: " . ($parsedConsulta['QuantidadeRejeitada'] ?? '0') . "\n\n";
     
     // ========================================
     // PASSO 6: EXIBIR NFSes GERADAS
     // ========================================
     echo "→ PASSO 6: NFSes geradas:\n\n";
     
-    foreach ($resultado->dados['nfses'] as $index => $nfse) {
+    $listaNfse = $parsedConsulta['ListaNfse']['CompNfse'] ?? [];
+    if (isset($listaNfse['Nfse'])) {
+        $listaNfse = [$listaNfse];
+    }
+
+    foreach ($listaNfse as $index => $nfse) {
+        $info = $nfse['Nfse']['InfNfse'] ?? [];
         echo "  NFSe " . ($index + 1) . ":\n";
-        echo "    Número: " . $nfse['numero'] . "\n";
-        echo "    Código Verificação: " . $nfse['codigoVerificacao'] . "\n";
-        echo "    Data Emissão: " . $nfse['dataEmissao'] . "\n\n";
+        echo "    Número: " . ($info['Numero'] ?? '---') . "\n";
+        echo "    Código Verificação: " . ($info['CodigoVerificacao'] ?? '---') . "\n";
+        echo "    Data Emissão: " . ($info['DataEmissao'] ?? '---') . "\n\n";
     }
     
     // ========================================
@@ -176,7 +196,7 @@ try {
     echo "✓ DPS criadas: " . count($listaDps) . "\n";
     echo "✓ Lote enviado: {$numeroLote}\n";
     echo "✓ Protocolo: {$protocolo}\n";
-    echo "✓ NFSes geradas: " . count($resultado->dados['nfses']) . "\n";
+    echo "✓ NFSes geradas: " . count($listaNfse) . "\n";
     echo "✓ Status: Sucesso\n\n";
     
 } catch (Exception $e) {

@@ -53,17 +53,45 @@ require 'vendor/autoload.php';
 
 use NFSeNacional\Config\Config;
 use NFSeNacional\Tools\Tools;
+use NFSeNacional\Make\Make;
 
-$config = new Config([
+$config = Config::fromArray([
     'cnpj' => '12345678901234',
     'im' => '123456',
-    'ambiente' => 2
+    'cmun' => '3550308',
+    'razaosocial' => 'Minha Empresa LTDA',
+    'ambiente' => 2,
+    'certPfx' => __DIR__ . '/certificados/empresa.pfx',
+    'certPassword' => 'senha',
+    'wsdl' => [
+        'homologacao' => [
+            'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
+            'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
+            'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
+            'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
+            'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
+        ]
+    ]
 ]);
 
 $tools = new Tools($config);
-$response = $tools->enviarDps($xml);
 
-echo $response->sucesso ? "Sucesso!" : "Erro";
+$dps = (new Make())
+    ->setIdentificacao(['numero' => '123', 'serie' => 'A1', 'tipo' => 1])
+    ->setPrestador(['cnpj' => '12345678901234', 'im' => '123456', 'razaoSocial' => 'Minha Empresa LTDA'])
+    ->setTomador(['cpfCnpj' => '98765432100', 'razaoSocial' => 'Cliente Teste', 'email' => 'cliente@teste.com'])
+    ->setServico([
+        'itemListaServico' => '01.01',
+        'discriminacao' => 'Serviço de desenvolvimento',
+        'codigoMunicipio' => '3550308',
+        'valorServicos' => 1000.00,
+        'valorIss' => 50.00,
+        'aliquota' => 0.0500
+    ]);
+
+$response = $tools->enviarDps($dps->getXML());
+
+echo $response->sucesso ? 'Sucesso!' : 'Erro: ' . $response->mensagem;
 ```
 
 ## Documentação Completa

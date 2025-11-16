@@ -22,7 +22,16 @@ try {
         'razaosocial' => 'Minha Empresa LTDA',
         'ambiente' => 2, // 1=Produção, 2=Homologação
         'certPfx' => __DIR__ . '/certificado.pfx',
-        'certPassword' => 'senha_certificado'
+        'certPassword' => 'senha_certificado',
+        'wsdl' => [
+            'homologacao' => [
+                'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
+                'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
+                'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
+                'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
+                'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
+            ]
+        ]
     ]);
     
     $tools = new Tools($config);
@@ -30,9 +39,16 @@ try {
     // 2. CRIAR DPS
     $dps = new Make();
     
+    $dps->setIdentificacao([
+        'numero' => '123',
+        'serie' => 'UNICA',
+        'tipo' => 1
+    ]);
+    
     $dps->setPrestador([
         'cnpj' => '12345678901234',
-        'im' => '123456'
+        'im' => '123456',
+        'razaoSocial' => 'Minha Empresa LTDA'
     ]);
     
     $dps->setTomador([
@@ -47,7 +63,7 @@ try {
         'codigoMunicipio' => '3550308',
         'valorServicos' => 1000.00,
         'valorIss' => 50.00,
-        'aliquota' => 5.00
+        'aliquota' => 0.0500
     ]);
     
     // 3. GERAR XML

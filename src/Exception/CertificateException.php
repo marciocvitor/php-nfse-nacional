@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace NFSeNacional\Exception;
+
+use RuntimeException;
+
+class CertificateException extends RuntimeException
+{
+}
+

@@ -23,6 +23,17 @@ Este manual explica o **processo em lote (assíncrono)**.
 
 ---
 
+## Conformidade antes do envio
+
+1. **Validação de dados** – `DpsValidator` confirma CNPJ/CPF, valores monetários, limites de lista de serviço e campos obrigatórios.
+2. **Validação contra schemas ABRASF** – todo XML (DPS individual e lote) é validado usando os arquivos em `src/Schemas`.
+3. **Assinatura XMLDSig** – cada `InfDps` e o `LoteRps` são assinados automaticamente com o certificado A1 (.pfx) usando `xmlseclibs` (SHA256/RSA).
+4. **Transporte seguro** – o `SoapClient` usa o certificado convertido para PEM, enviando requisições reais (`RecepcionarLoteRps`, `ConsultarLoteRps`, etc.) para os WSDL configurados.
+
+> ⚠️ Os WSDLs oficiais variam por ambiente. Consulte a documentação do Portal Nacional e preencha `Config::fromArray(['wsdl' => [...]])` com as URLs de homologação e produção vigentes.
+
+---
+
 ## Diferenças: Individual vs Lote
 
 ### Emissão Individual (Síncrona)
@@ -101,7 +112,20 @@ use NFSeNacional\Make\Make;
 $config = Config::fromArray([
     'cnpj' => '12345678901234',
     'im' => '123456',
-    'ambiente' => 2
+    'cmun' => '3550308',
+    'razaosocial' => 'Minha Empresa LTDA',
+    'ambiente' => 2,
+    'certPfx' => __DIR__ . '/certificados/empresa-hom.pfx',
+    'certPassword' => 'senha',
+    'wsdl' => [
+        'homologacao' => [
+            'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
+            'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
+            'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
+            'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
+            'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
+        ]
+    ]
 ]);
 
 $tools = new Tools($config);
@@ -111,7 +135,8 @@ $listaDps = [];
 
 // DPS 1
 $dps1 = new Make();
-$dps1->setPrestador(['cnpj' => '12345678901234', 'im' => '123456']);
+$dps1->setIdentificacao(['numero' => '1', 'serie' => 'UNICA', 'tipo' => 1]);
+$dps1->setPrestador(['cnpj' => '12345678901234', 'im' => '123456', 'razaoSocial' => 'Minha Empresa LTDA']);
 $dps1->setTomador([
     'cpfCnpj' => '11111111111',
     'razaoSocial' => 'Cliente 1',
@@ -123,7 +148,7 @@ $dps1->setServico([
     'codigoMunicipio' => '3550308',
     'valorServicos' => 1000.00,
     'valorIss' => 50.00,
-    'aliquota' => 5.00
+    'aliquota' => 0.0500
 ]);
 $listaDps[] = $dps1->getXML();
 
@@ -308,7 +333,20 @@ use NFSeNacional\Make\Make;
 $config = Config::fromArray([
     'cnpj' => '12345678901234',
     'im' => '123456',
-    'ambiente' => 2
+    'cmun' => '3550308',
+    'razaosocial' => 'Minha Empresa LTDA',
+    'ambiente' => 2,
+    'certPfx' => __DIR__ . '/certificados/empresa-hom.pfx',
+    'certPassword' => 'senha',
+    'wsdl' => [
+        'homologacao' => [
+            'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
+            'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
+            'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
+            'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
+            'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
+        ]
+    ]
 ]);
 
 $tools = new Tools($config);

@@ -4,199 +4,299 @@ declare(strict_types=1);
 
 namespace NFSeNacional\Tools;
 
-use NFSeNacional\Config\Config;
+use NFSeNacional\Common\Logger;
 use NFSeNacional\Common\Response;
+use NFSeNacional\Config\Config;
+use NFSeNacional\Exception\CommunicationException;
+use NFSeNacional\Exception\ValidationException;
+use NFSeNacional\Security\Certificate;
+use NFSeNacional\Security\XmlSigner;
+use NFSeNacional\Validator\SchemaType;
+use NFSeNacional\Validator\SchemaValidator;
+use SoapClient;
+use Throwable;
 
 /**
  * Classe principal para comunicação com o WebService da NFSe Nacional
- * 
- * @package NFSeNacional\Tools
  */
 class Tools
 {
+    private Certificate $certificate;
+    private XmlSigner $signer;
+    private SchemaValidator $schemaValidator;
+    private Logger $logger;
+
     public function __construct(
-        private readonly Config $config
-    ) {}
+        private readonly Config $config,
+        ?string $logDir = null
+    ) {
+        $this->certificate = Certificate::fromPfx($config->certPfx, $config->certPassword);
+        $this->signer = new XmlSigner($this->certificate);
+        $this->schemaValidator = new SchemaValidator(dirname(__DIR__) . '/Schemas');
+        $this->logger = new Logger($logDir);
+    }
     
     /**
      * Envia uma DPS individual (SÍNCRONO)
-     * Retorna a NFSe imediatamente na mesma requisição
-     * 
-     * @param string $xml XML da DPS
-     * @return Response Resposta com NFSe gerada
      */
     public function enviarDps(string $xml): Response
     {
-        // TODO: Implementar envio real para o webservice
+        try {
+            $this->validateXml($xml, SchemaType::DPS);
+            $signedXml = $this->signer->sign($xml);
+            $soapResult = $this->callSoap('RecepcionarDps', $signedXml);
+            $response = $this->buildResponse($soapResult, 'RecepcionarDps');
+            
+            // Extrai número da DPS do XML para log
+            $numeroDps = $this->extractDpsNumber($xml);
+            
+            $this->logger->logEnvioDps(
+                $numeroDps,
+                $response->sucesso,
+                $response->numero,
+                $response->sucesso ? null : $response->mensagem
+            );
+            
+            return $response;
+        } catch (Throwable $e) {
+            $numeroDps = $this->extractDpsNumber($xml);
+            $this->logger->logEnvioDps($numeroDps, false, null, $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    /**
+     * Envia lote de DPS (ASSÍNCRONO)
+     */
+    public function enviarLoteDps(array $listaDps, string $numeroLote): Response
+    {
+        try {
+            if (empty($listaDps)) {
+                throw new ValidationException('Lista de DPS vazia');
+            }
+            
+            if (count($listaDps) > 50) {
+                throw new ValidationException('Limite máximo de 50 DPS por lote excedido');
+            }
+            
+            $assinadas = [];
+            foreach ($listaDps as $dpsXml) {
+                $this->validateXml($dpsXml, SchemaType::DPS);
+                $assinadas[] = $this->signer->sign($dpsXml);
+            }
+            
+            $xmlLote = $this->gerarXmlLote($assinadas, $numeroLote);
+            $this->validateXml($xmlLote, SchemaType::LOTE);
+            $signedLote = $this->signer->sign($xmlLote, 'LoteRps');
+            $soapResult = $this->callSoap('RecepcionarLoteRps', $signedLote);
+            $response = $this->buildResponse($soapResult, 'RecepcionarLoteRps');
+            
+            $protocolo = $response->dados['parsed']['Protocolo'] ?? null;
+            
+            $this->logger->logEnvioLote(
+                $numeroLote,
+                count($listaDps),
+                $response->sucesso,
+                $protocolo ? (string) $protocolo : null,
+                $response->sucesso ? null : $response->mensagem
+            );
+            
+            return $response;
+        } catch (Throwable $e) {
+            $this->logger->logEnvioLote($numeroLote, count($listaDps), false, null, $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    /**
+     * Consulta resultado de um lote pelo protocolo (ASSÍNCRONO)
+     */
+    public function consultarLote(string $protocolo): Response
+    {
+        try {
+            $xml = $this->gerarXmlConsultaLote($protocolo);
+            $soapResult = $this->callSoap('ConsultarLoteRps', $xml);
+            $response = $this->buildResponse($soapResult, 'ConsultarLoteRps');
+            
+            $situacao = $response->dados['parsed']['Situacao'] ?? null;
+            
+            $this->logger->logConsultaLote(
+                $protocolo,
+                $response->sucesso,
+                $situacao ? (string) $situacao : null,
+                $response->sucesso ? null : $response->mensagem
+            );
+            
+            return $response;
+        } catch (Throwable $e) {
+            $this->logger->logConsultaLote($protocolo, false, null, $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    /**
+     * Consulta NFSe individual por número (SÍNCRONO)
+     */
+    public function consultarNfse(string $numero): Response
+    {
+        try {
+            $xml = $this->gerarXmlConsultaNfse($numero);
+            $soapResult = $this->callSoap('ConsultarNfse', $xml);
+            $response = $this->buildResponse($soapResult, 'ConsultarNfse');
+            
+            $this->logger->log('ConsultarNfse', "Consulta realizada para NFSe: {$numero}", [
+                'numero' => $numero,
+                'sucesso' => $response->sucesso
+            ]);
+            
+            return $response;
+        } catch (Throwable $e) {
+            $this->logger->log('ConsultarNfse', "Falha ao consultar NFSe: {$numero}", [
+                'numero' => $numero,
+                'erro' => $e->getMessage()
+            ]);
+            throw $e;
+        }
+    }
+    
+    /**
+     * Cancela NFSe individual (SÍNCRONO)
+     */
+    public function cancelarNfse(string $numero, string $motivo): Response
+    {
+        try {
+            $xml = $this->gerarXmlCancelamento($numero, $motivo);
+            $soapResult = $this->callSoap('CancelarNfse', $xml);
+            $response = $this->buildResponse($soapResult, 'CancelarNfse');
+            
+            $this->logger->logCancelamento(
+                $numero,
+                $response->sucesso,
+                $response->sucesso ? null : $response->mensagem
+            );
+            
+            return $response;
+        } catch (Throwable $e) {
+            $this->logger->logCancelamento($numero, false, $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    private function validateXml(string $xml, SchemaType $schemaType): void
+    {
+        if (!$this->config->validarSchemas) {
+            return;
+        }
+
+        try {
+            $this->schemaValidator->validate($xml, $schemaType);
+            $this->logger->logValidacao($schemaType->value, true);
+        } catch (Throwable $e) {
+            $this->logger->logValidacao($schemaType->value, false, $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Extrai número da DPS do XML
+     */
+    private function extractDpsNumber(string $xml): string
+    {
+        try {
+            $simpleXml = @simplexml_load_string($xml);
+            if ($simpleXml !== false) {
+                $numeroNode = $simpleXml->xpath('//Numero');
+                if (!empty($numeroNode)) {
+                    return (string) $numeroNode[0];
+                }
+            }
+        } catch (Throwable) {
+            // Ignora erros de parsing
+        }
+        
+        return 'N/A';
+    }
+
+    private function callSoap(string $operation, string $xml): string
+    {
+        $wsdl = $this->config->getWsdl($operation);
+
+        try {
+            $client = new SoapClient($wsdl, [
+                'trace' => true,
+                'soap_version' => SOAP_1_2,
+                'exceptions' => true,
+                'cache_wsdl' => WSDL_CACHE_DISK,
+                'local_cert' => $this->certificate->getPemPath(),
+                'passphrase' => $this->certificate->getPassphrase(),
+            ]);
+
+            $params = ['nfseDadosMsg' => $xml];
+            $response = $client->__soapCall($operation, [$params]);
+
+            return $this->extractXmlFromSoapResponse($response);
+        } catch (Throwable $e) {
+            throw new CommunicationException(
+                sprintf('Falha na operação %s (%s): %s', $operation, $this->config->ambienteNome(), $e->getMessage()),
+                (int) $e->getCode(),
+                $e
+            );
+        }
+    }
+
+    private function extractXmlFromSoapResponse(mixed $response): string
+    {
+        if (is_string($response) && str_contains($response, '<')) {
+            return $response;
+        }
+
+        if (is_object($response)) {
+            $vars = get_object_vars($response);
+            foreach ($vars as $value) {
+                if (is_string($value) && str_contains($value, '<')) {
+                    return $value;
+                }
+            }
+        }
+
+        throw new CommunicationException('Resposta SOAP não contém payload XML esperado.');
+    }
+
+    private function buildResponse(string $xml, string $contexto): Response
+    {
+        $dados = [
+            'contexto' => $contexto,
+            'xml' => $xml,
+        ];
+
+        $simpleXml = @simplexml_load_string($xml);
+        if ($simpleXml !== false) {
+            $dados['parsed'] = json_decode(json_encode($simpleXml), true);
+            $numeroNode = $simpleXml->xpath('//NumeroNfse');
+            $codigoNode = $simpleXml->xpath('//CodigoVerificacao');
+            $numero = $numeroNode[0] ?? null;
+            $codigo = $codigoNode[0] ?? null;
+
+            return new Response(
+                sucesso: true,
+                mensagem: 'Operação concluída com sucesso',
+                dados: $dados,
+                numero: $numero ? (string) $numero : null,
+                codigoVerificacao: $codigo ? (string) $codigo : null,
+                xml: $xml
+            );
+        }
+
         return new Response(
             sucesso: true,
-            mensagem: 'DPS enviado com sucesso (modo demonstração - SÍNCRONO)',
-            numero: '12345',
-            codigoVerificacao: 'ABC123',
+            mensagem: 'Operação concluída. Veja XML em dados.xml',
+            dados: $dados,
             xml: $xml
         );
     }
     
     /**
-     * Envia lote de DPS (ASSÍNCRONO)
-     * Retorna protocolo para consulta posterior
-     * 
-     * @param array $listaDps Array com XMLs das DPS
-     * @param string $numeroLote Número identificador do lote
-     * @return Response Resposta com protocolo do lote
-     */
-    public function enviarLoteDps(array $listaDps, string $numeroLote): Response
-    {
-        if (empty($listaDps)) {
-            return new Response(
-                sucesso: false,
-                mensagem: 'Lista de DPS vazia'
-            );
-        }
-        
-        if (count($listaDps) > 50) {
-            return new Response(
-                sucesso: false,
-                mensagem: 'Limite máximo de 50 DPS por lote excedido'
-            );
-        }
-        
-        // Gerar XML do lote
-        $xmlLote = $this->gerarXmlLote($listaDps, $numeroLote);
-        
-        // TODO: Implementar envio real para o webservice
-        $protocolo = 'PROT' . date('YmdHis') . rand(1000, 9999);
-        
-        return new Response(
-            sucesso: true,
-            mensagem: 'Lote enviado com sucesso. Use o protocolo para consultar o resultado.',
-            dados: [
-                'protocolo' => $protocolo,
-                'numeroLote' => $numeroLote,
-                'quantidadeDps' => count($listaDps),
-                'dataEnvio' => date('Y-m-d H:i:s')
-            ]
-        );
-    }
-    
-    /**
-     * Consulta resultado de um lote pelo protocolo (ASSÍNCRONO)
-     * 
-     * @param string $protocolo Protocolo retornado no envio do lote
-     * @return Response Resposta com status e NFSes geradas
-     */
-    public function consultarLote(string $protocolo): Response
-    {
-        // TODO: Implementar consulta real
-        
-        // Simula processamento
-        return new Response(
-            sucesso: true,
-            mensagem: 'Lote processado com sucesso',
-            dados: [
-                'protocolo' => $protocolo,
-                'situacao' => 'Processado',
-                'quantidadeProcessada' => 3,
-                'quantidadeComSucesso' => 3,
-                'quantidadeComErro' => 0,
-                'nfses' => [
-                    [
-                        'numero' => '10001',
-                        'codigoVerificacao' => 'ABC123',
-                        'dataEmissao' => date('Y-m-d H:i:s')
-                    ],
-                    [
-                        'numero' => '10002',
-                        'codigoVerificacao' => 'DEF456',
-                        'dataEmissao' => date('Y-m-d H:i:s')
-                    ],
-                    [
-                        'numero' => '10003',
-                        'codigoVerificacao' => 'GHI789',
-                        'dataEmissao' => date('Y-m-d H:i:s')
-                    ]
-                ]
-            ]
-        );
-    }
-    
-    /**
-     * Consulta NFSe individual por número (SÍNCRONO)
-     * 
-     * @param string $numero Número da NFSe
-     * @return Response
-     */
-    public function consultarNfse(string $numero): Response
-    {
-        // TODO: Implementar consulta real
-        return new Response(
-            sucesso: true,
-            mensagem: 'Consulta realizada (modo demonstração)',
-            dados: ['numero' => $numero]
-        );
-    }
-    
-    /**
-     * Consulta NFSes por NSU (LOTE)
-     * Retorna até 50 documentos a partir do último NSU
-     * 
-     * @param int $ultimoNsu Último NSU recebido (0 para começar do início)
-     * @param int $limite Quantidade máxima a retornar (max: 50)
-     * @return Response
-     */
-    public function consultarPorNsu(int $ultimoNsu = 0, int $limite = 50): Response
-    {
-        if ($limite > 50) {
-            $limite = 50;
-        }
-        
-        // TODO: Implementar consulta real
-        return new Response(
-            sucesso: true,
-            mensagem: "Consultados até {$limite} documentos a partir do NSU {$ultimoNsu}",
-            dados: [
-                'ultimoNsu' => $ultimoNsu,
-                'proximoNsu' => $ultimoNsu + $limite,
-                'quantidadeRetornada' => 2,
-                'documentos' => [
-                    [
-                        'nsu' => $ultimoNsu + 1,
-                        'numero' => '20001',
-                        'tipo' => 'NFSe'
-                    ],
-                    [
-                        'nsu' => $ultimoNsu + 2,
-                        'numero' => '20002',
-                        'tipo' => 'NFSe'
-                    ]
-                ]
-            ]
-        );
-    }
-    
-    /**
-     * Cancela NFSe individual (SÍNCRONO)
-     * 
-     * @param string $numero Número da NFSe
-     * @param string $motivo Motivo do cancelamento
-     * @return Response
-     */
-    public function cancelarNfse(string $numero, string $motivo): Response
-    {
-        // TODO: Implementar cancelamento real
-        return new Response(
-            sucesso: true,
-            mensagem: 'NFSe cancelada (modo demonstração)',
-            dados: ['numero' => $numero, 'motivo' => $motivo]
-        );
-    }
-    
-    /**
      * Gera XML do lote de DPS
-     * 
-     * @param array $listaDps
-     * @param string $numeroLote
-     * @return string
      */
     private function gerarXmlLote(array $listaDps, string $numeroLote): string
     {
@@ -210,7 +310,13 @@ class Tools
         $xml .= '<ListaRps>';
         
         foreach ($listaDps as $dps) {
-            $xml .= $dps;
+            $xml .= '<Rps>';
+            $xml .= str_replace(
+                ['<?xml version="1.0" encoding="UTF-8"?>', '<EnviarDpsEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">', '</EnviarDpsEnvio>', '<Dps>', '</Dps>'],
+                '',
+                $dps
+            );
+            $xml .= '</Rps>';
         }
         
         $xml .= '</ListaRps>';
@@ -218,5 +324,48 @@ class Tools
         $xml .= '</EnviarLoteRpsEnvio>';
         
         return $xml;
+    }
+
+    private function gerarXmlConsultaLote(string $protocolo): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<ConsultarLoteRpsEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">'
+            . '<Prestador>'
+            . '<CpfCnpj><Cnpj>' . $this->config->cnpj . '</Cnpj></CpfCnpj>'
+            . '<InscricaoMunicipal>' . $this->config->im . '</InscricaoMunicipal>'
+            . '</Prestador>'
+            . '<Protocolo>' . $protocolo . '</Protocolo>'
+            . '</ConsultarLoteRpsEnvio>';
+    }
+
+    private function gerarXmlConsultaNfse(string $numero): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<ConsultarNfseEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">'
+            . '<Prestador>'
+            . '<CpfCnpj><Cnpj>' . $this->config->cnpj . '</Cnpj></CpfCnpj>'
+            . '<InscricaoMunicipal>' . $this->config->im . '</InscricaoMunicipal>'
+            . '</Prestador>'
+            . '<NumeroNfse>' . $numero . '</NumeroNfse>'
+            . '</ConsultarNfseEnvio>';
+    }
+
+    private function gerarXmlCancelamento(string $numero, string $motivo): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8"?>'
+            . '<CancelarNfseEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">'
+            . '<Pedido>'
+            . '<InfPedidoCancelamento Id="Canc' . $numero . '">'
+            . '<IdentificacaoNfse>'
+            . '<Numero>' . $numero . '</Numero>'
+            . '<CpfCnpj><Cnpj>' . $this->config->cnpj . '</Cnpj></CpfCnpj>'
+            . '<InscricaoMunicipal>' . $this->config->im . '</InscricaoMunicipal>'
+            . '<CodigoMunicipio>' . $this->config->cmun . '</CodigoMunicipio>'
+            . '</IdentificacaoNfse>'
+            . '<CodigoCancelamento>2</CodigoCancelamento>'
+            . '<Motivo>' . htmlspecialchars($motivo, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '</Motivo>'
+            . '</InfPedidoCancelamento>'
+            . '</Pedido>'
+            . '</CancelarNfseEnvio>';
     }
 }
