@@ -216,7 +216,7 @@ php-nfse-nacional/
 - [x] Cancelamento (`CancelarNfse`)
 - [x] Configuração de ambientes com WSDL dedicados
 - [x] Sistema de log com versão e NT (similar ao nfephp-org)
-- [ ] Geração de DANFSe/PDF (em desenvolvimento)
+- [x] Geração de DANFSe/PDF (Documento Auxiliar da NFSe)
 - [ ] Integração com filas/persistência (em desenvolvimento)
 
 ---
@@ -258,6 +258,58 @@ echo "NT aplicada: " . $logger->getNotaTecnica() . PHP_EOL;
 - Ao atualizar a biblioteca para uma nova NT, atualize os arquivos `VERSION.txt` e `NT.txt` na raiz do projeto
 - Registre a nova NT no arquivo [NOTAS-TECNICAS.md](NOTAS-TECNICAS.md)
 - Documente as mudanças no [CHANGELOG.md](CHANGELOG.md)
+
+---
+
+## Geração de DANFSe (PDF)
+
+A biblioteca gera automaticamente o **DANFSe (Documento Auxiliar da Nota Fiscal de Serviço Eletrônica)** em PDF a partir do XML da NFSe.
+
+### Uso Básico
+
+```php
+// Após emitir ou consultar uma NFSe
+$response = $tools->enviarDps($xml);
+
+// Gerar PDF e salvar em arquivo
+$tools->gerarDanfseArquivo($response, '/caminho/danfse.pdf');
+
+// Ou obter como string (para download direto)
+$pdfContent = $tools->gerarDanfse($response);
+header('Content-Type: application/pdf');
+header('Content-Disposition: attachment; filename="danfse.pdf"');
+echo $pdfContent;
+
+// Ou obter como base64 (para exibir em HTML)
+$pdfBase64 = $tools->gerarDanfseBase64($response);
+echo '<iframe src="data:application/pdf;base64,' . $pdfBase64 . '"></iframe>';
+```
+
+### Dados Adicionais
+
+Você pode passar dados adicionais que não estão no XML:
+
+```php
+$dadosAdicionais = [
+    'prestador' => [
+        'razaoSocial' => 'Minha Empresa LTDA'
+    ]
+];
+
+$tools->gerarDanfseArquivo($response, '/caminho/danfse.pdf', $dadosAdicionais);
+```
+
+### Conteúdo do DANFSe
+
+O PDF gerado contém:
+- Cabeçalho com número e código de verificação
+- Dados do prestador (CNPJ, IM, Razão Social)
+- Dados do tomador (CPF/CNPJ, Razão Social, E-mail)
+- Dados do serviço (Item da lista, Discriminação, Código do município)
+- Valores (Valor dos serviços, Alíquota, Valor do ISS, ISS Retido)
+- Rodapé com código de verificação e link para consulta
+
+**Exemplo completo:** [examples/exemplo_danfse.php](examples/exemplo_danfse.php)
 
 ---
 

@@ -9,6 +9,7 @@ use NFSeNacional\Common\Response;
 use NFSeNacional\Config\Config;
 use NFSeNacional\Exception\CommunicationException;
 use NFSeNacional\Exception\ValidationException;
+use NFSeNacional\Pdf\DanfseGenerator;
 use NFSeNacional\Security\Certificate;
 use NFSeNacional\Security\XmlSigner;
 use NFSeNacional\Validator\SchemaType;
@@ -180,6 +181,45 @@ class Tools
             $this->logger->logCancelamento($numero, false, $e->getMessage());
             throw $e;
         }
+    }
+
+    /**
+     * Gera PDF do DANFSe a partir do Response da NFSe
+     * 
+     * @param Response $response Response da NFSe emitida/consultada
+     * @param array $dadosAdicionais Dados adicionais para o PDF (ex: prestador.razaoSocial)
+     * @return string Conteúdo do PDF em binário
+     */
+    public function gerarDanfse(Response $response, array $dadosAdicionais = []): string
+    {
+        $generator = new DanfseGenerator();
+        return $generator->gerar($response, $dadosAdicionais);
+    }
+
+    /**
+     * Gera PDF do DANFSe e salva em arquivo
+     * 
+     * @param Response $response Response da NFSe emitida/consultada
+     * @param string $caminho Caminho completo do arquivo PDF
+     * @param array $dadosAdicionais Dados adicionais para o PDF
+     */
+    public function gerarDanfseArquivo(Response $response, string $caminho, array $dadosAdicionais = []): void
+    {
+        $generator = new DanfseGenerator();
+        $generator->gerarArquivo($response, $caminho, $dadosAdicionais);
+    }
+
+    /**
+     * Gera PDF do DANFSe e retorna como base64
+     * 
+     * @param Response $response Response da NFSe emitida/consultada
+     * @param array $dadosAdicionais Dados adicionais para o PDF
+     * @return string PDF em base64
+     */
+    public function gerarDanfseBase64(Response $response, array $dadosAdicionais = []): string
+    {
+        $generator = new DanfseGenerator();
+        return $generator->gerarBase64($response, $dadosAdicionais);
     }
     
     private function validateXml(string $xml, SchemaType $schemaType): void
