@@ -195,6 +195,7 @@ php-nfse-nacional/
 
 ## Documentação
 
+- **[GUIA-APLICACAO.md](GUIA-APLICACAO.md)** - ⭐ **Como aplicar a biblioteca no seu projeto** (3 opções)
 - **[QUICK-START.md](QUICK-START.md)** - Início rápido em 3 passos
 - **[INSTALL.md](INSTALL.md)** - Guia completo de instalação e configuração
 - **[MANUAL-LOTE.md](MANUAL-LOTE.md)** - Processo completo de envio em lote e tratamentos
