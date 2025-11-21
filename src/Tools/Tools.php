@@ -261,24 +261,38 @@ class Tools
     {
         $wsdl = $this->config->getWsdl($operation);
 
+        // Verificar se WSDL está configurado
+        if (empty($wsdl)) {
+            throw new CommunicationException(
+                "WSDL não configurado para operação '{$operation}' no ambiente '{$this->config->ambienteNome()}'"
+            );
+        }
+
         try {
+            // Em homologação, pode ser necessário desabilitar verificação SSL
+            $isHomologacao = $this->config->ambiente === 2;
+            
             // Configurar contexto de stream para permitir acesso ao WSDL remoto
+            $sslOptions = [
+                'verify_peer' => !$isHomologacao, // Desabilita em homologação se necessário
+                'verify_peer_name' => !$isHomologacao,
+                'allow_self_signed' => $isHomologacao, // Permite em homologação
+            ];
+
             $streamContext = stream_context_create([
                 'http' => [
-                    'timeout' => 30,
+                    'timeout' => 60, // Aumentado para 60 segundos
                     'user_agent' => 'PHP-SOAP/NFSe-Nacional',
                     'follow_location' => true,
                     'max_redirects' => 5,
                 ],
-                'ssl' => [
-                    'verify_peer' => true,
-                    'verify_peer_name' => true,
-                    'allow_self_signed' => false,
-                    'cafile' => null, // Usar certificados do sistema
-                ]
+                'ssl' => $sslOptions
             ]);
 
-            $client = new SoapClient($wsdl, [
+            // Verificar se WSDL é acessível antes de criar SoapClient
+            $this->validateWsdlAccessibility($wsdl, $streamContext);
+
+            $soapOptions = [
                 'trace' => true,
                 'soap_version' => SOAP_1_2,
                 'exceptions' => true,
@@ -286,12 +300,48 @@ class Tools
                 'local_cert' => $this->certificate->getPemPath(),
                 'passphrase' => $this->certificate->getPassphrase(),
                 'stream_context' => $streamContext,
-            ]);
+                'connection_timeout' => 60,
+            ];
+
+            // Em caso de erro de WSDL, tenta sem cache
+            $client = null;
+            try {
+                $client = new SoapClient($wsdl, $soapOptions);
+            } catch (\SoapFault $e) {
+                if (str_contains($e->getMessage(), 'WSDL') || str_contains($e->getMessage(), 'failed to load')) {
+                    // Tenta sem cache de WSDL
+                    $soapOptions['cache_wsdl'] = WSDL_CACHE_NONE;
+                    $client = new SoapClient($wsdl, $soapOptions);
+                } else {
+                    throw $e;
+                }
+            }
 
             $params = ['nfseDadosMsg' => $xml];
             $response = $client->__soapCall($operation, [$params]);
 
             return $this->extractXmlFromSoapResponse($response);
+        } catch (\SoapFault $e) {
+            $mensagem = sprintf(
+                'Falha na operação %s (%s): %s',
+                $operation,
+                $this->config->ambienteNome(),
+                $e->getMessage()
+            );
+            
+            // Adiciona detalhes adicionais
+            $mensagem .= "\nWSDL: {$wsdl}";
+            
+            // Se for erro de WSDL, adiciona dicas
+            if (str_contains($e->getMessage(), 'WSDL') || str_contains($e->getMessage(), 'failed to load')) {
+                $mensagem .= "\n\nDicas para resolver:";
+                $mensagem .= "\n1. Verifique se a URL do WSDL está correta";
+                $mensagem .= "\n2. Verifique sua conexão com a internet";
+                $mensagem .= "\n3. Em homologação, pode ser necessário desabilitar verificação SSL";
+                $mensagem .= "\n4. Tente acessar a URL do WSDL no navegador para verificar se está disponível";
+            }
+            
+            throw new CommunicationException($mensagem, (int) $e->getCode(), $e);
         } catch (Throwable $e) {
             throw new CommunicationException(
                 sprintf('Falha na operação %s (%s): %s', $operation, $this->config->ambienteNome(), $e->getMessage()),
@@ -299,6 +349,20 @@ class Tools
                 $e
             );
         }
+    }
+
+    /**
+     * Valida se o WSDL é acessível (apenas para arquivos locais)
+     */
+    private function validateWsdlAccessibility(string $wsdl, $streamContext): void
+    {
+        // Se for arquivo local, verifica se existe
+        if (!filter_var($wsdl, FILTER_VALIDATE_URL) && !is_file($wsdl)) {
+            throw new CommunicationException(
+                "Arquivo WSDL não encontrado: {$wsdl}"
+            );
+        }
+        // Para URLs, deixa o SoapClient tentar carregar e tratar o erro
     }
 
     private function extractXmlFromSoapResponse(mixed $response): string
