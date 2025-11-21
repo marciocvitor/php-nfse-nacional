@@ -98,6 +98,14 @@ class Make
         return $this;
     }
     
+    /**
+     * Alias para setServico() para compatibilidade
+     */
+    public function addServico(array $data): self
+    {
+        return $this->setServico($data);
+    }
+    
     public function getXML(): string
     {
         $this->assertRequiredData();
