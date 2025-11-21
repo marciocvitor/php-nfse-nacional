@@ -262,6 +262,22 @@ class Tools
         $wsdl = $this->config->getWsdl($operation);
 
         try {
+            // Configurar contexto de stream para permitir acesso ao WSDL remoto
+            $streamContext = stream_context_create([
+                'http' => [
+                    'timeout' => 30,
+                    'user_agent' => 'PHP-SOAP/NFSe-Nacional',
+                    'follow_location' => true,
+                    'max_redirects' => 5,
+                ],
+                'ssl' => [
+                    'verify_peer' => true,
+                    'verify_peer_name' => true,
+                    'allow_self_signed' => false,
+                    'cafile' => null, // Usar certificados do sistema
+                ]
+            ]);
+
             $client = new SoapClient($wsdl, [
                 'trace' => true,
                 'soap_version' => SOAP_1_2,
@@ -269,6 +285,7 @@ class Tools
                 'cache_wsdl' => WSDL_CACHE_DISK,
                 'local_cert' => $this->certificate->getPemPath(),
                 'passphrase' => $this->certificate->getPassphrase(),
+                'stream_context' => $streamContext,
             ]);
 
             $params = ['nfseDadosMsg' => $xml];
