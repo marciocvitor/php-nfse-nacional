@@ -44,11 +44,30 @@ class Tools
         // Configura cliente HTTP REST (Guzzle)
         // Nota: O Portal Nacional pode exigir autenticação adicional (token, etc.)
         // Consulte a documentação oficial: https://www.nfse.gov.br/swagger/contribuintesissqn/
+        
+        // Obtém o caminho do certificado PEM (contém certificado + chave privada)
+        $certPemPath = $this->certificate->getPemPath();
+        $certPassphrase = $this->certificate->getPassphrase();
+        
+        // Configura o certificado SSL do cliente para mutual TLS
+        // O Guzzle aceita um arquivo PEM que contenha tanto o certificado quanto a chave privada
+        // Ou pode usar um array com 'cert', 'key' e 'passphrase'
+        // Como o arquivo PEM já contém ambos, usamos apenas 'cert'
+        // Mas se a chave tiver senha, precisamos usar o formato de array
+        $certConfig = $certPemPath;
+        if (!empty($certPassphrase)) {
+            // Se tiver senha, usa formato de array
+            $certConfig = [
+                $certPemPath, // Caminho do arquivo PEM (contém cert + key)
+                $certPassphrase // Senha da chave privada
+            ];
+        }
+        
         $this->httpClient = new Client([
             'base_uri' => $this->config->getApiBaseUrl(),
             'timeout' => 60,
             'verify' => $this->config->ambiente === 1, // Verifica SSL apenas em produção
-            // Certificado será usado via stream context se necessário
+            'cert' => $certConfig, // Certificado do cliente para mutual TLS
             'headers' => [
                 'Content-Type' => 'application/xml',
                 'Accept' => 'application/xml',
