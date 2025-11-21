@@ -106,6 +106,46 @@ class Make
         return $this->setServico($data);
     }
     
+    /**
+     * Define apenas os valores do serviço (ValorServicos, ValorIss, Aliquota)
+     * Aceita tanto camelCase quanto PascalCase nos nomes dos campos
+     */
+    public function setValores(array $valores): self
+    {
+        // Se ainda não existe array de serviço, inicializa
+        if (empty($this->servico)) {
+            $this->servico = [];
+        }
+        
+        // Normaliza os nomes dos campos (aceita camelCase e PascalCase)
+        $valorServicos = $valores['valorServicos'] ?? $valores['ValorServicos'] ?? $valores['valor_servicos'] ?? null;
+        $valorIss = $valores['valorIss'] ?? $valores['ValorIss'] ?? $valores['valor_iss'] ?? null;
+        $aliquota = $valores['aliquota'] ?? $valores['Aliquota'] ?? null;
+        
+        // Mescla os valores com os dados existentes do serviço
+        if ($valorServicos !== null) {
+            $this->servico['valorServicos'] = $valorServicos;
+        }
+        if ($valorIss !== null) {
+            $this->servico['valorIss'] = $valorIss;
+        }
+        if ($aliquota !== null) {
+            $this->servico['aliquota'] = $aliquota;
+        }
+        
+        // Se já tiver todos os dados do serviço, valida
+        if (!empty($this->servico['itemListaServico']) && !empty($this->servico['discriminacao']) && !empty($this->servico['codigoMunicipio'])) {
+            try {
+                $this->servico = $this->validator->validateServico($this->servico);
+            } catch (\Exception $e) {
+                // Se falhar na validação, apenas armazena os valores sem validar ainda
+                // A validação completa será feita no getXML()
+            }
+        }
+        
+        return $this;
+    }
+    
     public function getXML(): string
     {
         $this->assertRequiredData();
