@@ -168,6 +168,8 @@ O Portal Nacional publica WSDLs diferentes para homologação e produção. Info
 
 > Consulte o [Portal Nacional de NFSe](https://www.gov.br/nfse/pt-br) para obter as URLs mais recentes.
 
+**💡 Dica:** Use o script `test_wsdl_urls.php` para testar automaticamente várias variações de URLs e identificar quais estão acessíveis. Veja [TESTE-WSDL.md](TESTE-WSDL.md) para mais detalhes.
+
 ---
 
 ## Estrutura do Projeto

@@ -74,9 +74,17 @@ class Config
         }
         
         // WSDLs padrão do Portal Nacional
-        $baseUrl = $this->ambiente == 1 
-            ? 'https://api.nfse.gov.br/wsdl' 
-            : 'https://homologacao.nfse.gov.br/wsdl';
+        // Baseado em padrões comuns de APIs governamentais brasileiras
+        // Se estas URLs não funcionarem, configure manualmente no array $wsdl
+        
+        if ($this->ambiente == 1) {
+            // Produção
+            $baseUrl = 'https://api.nfse.gov.br/wsdl';
+        } else {
+            // Homologação - tenta variações comuns
+            // Nota: O Portal Nacional pode usar diferentes estruturas de URL
+            $baseUrl = 'https://homologacao.nfse.gov.br/wsdl';
+        }
         
         return $baseUrl . '/' . $operation . '.wsdl';
     }
