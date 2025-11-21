@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NFSeNacional\Make;
 
 use DOMDocument;
+use NFSeNacional\Validator\DpsValidator;
 
 /**
  * Classe para geração de XML da DPS/RPS (NFSe)
