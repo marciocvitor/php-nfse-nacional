@@ -25,15 +25,21 @@ class Certificate
         $this->meta = $meta;
     }
 
-    public static function fromPfx(string $pfxPath, string $passphrase): self
+    /**
+     * Cria instância a partir de arquivo PFX ou conteúdo binário
+     * Compatível com nfephp-org (aceita conteúdo binário diretamente)
+     * 
+     * @param string $pfxPathOrContent Caminho do arquivo PFX ou conteúdo binário do certificado
+     * @param string $passphrase Senha do certificado
+     * @return self
+     */
+    public static function fromPfx(string $pfxPathOrContent, string $passphrase): self
     {
-        if (!is_file($pfxPath)) {
-            throw new CertificateException("Certificado não encontrado em {$pfxPath}");
-        }
-
-        $pfxContent = file_get_contents($pfxPath);
-        if ($pfxContent === false) {
-            throw new CertificateException('Não foi possível ler o arquivo PFX');
+        // Verifica se é caminho de arquivo ou conteúdo binário
+        $pfxContent = self::getPfxContent($pfxPathOrContent);
+        
+        if ($pfxContent === false || $pfxContent === '') {
+            throw new CertificateException('Conteúdo do certificado PFX inválido ou vazio');
         }
 
         $certs = [];
@@ -55,6 +61,54 @@ class Certificate
         }
 
         return new self($certs['cert'], $certs['pkey'], $passphrase, $parsed);
+    }
+
+    /**
+     * Alias para fromPfx() - compatibilidade com nfephp-org
+     * Aceita conteúdo binário diretamente, igual ao readPfx() do nfephp-org
+     * 
+     * @param string $pfxPathOrContent Caminho do arquivo PFX ou conteúdo binário
+     * @param string $passphrase Senha do certificado
+     * @return self
+     */
+    public static function readPfx(string $pfxPathOrContent, string $passphrase): self
+    {
+        return self::fromPfx($pfxPathOrContent, $passphrase);
+    }
+
+    /**
+     * Extrai o conteúdo binário do PFX
+     * Aceita tanto caminho de arquivo quanto conteúdo binário diretamente
+     * Compatível com nfephp-org (readPfx aceita conteúdo binário)
+     * 
+     * @param string $pfxPathOrContent Caminho do arquivo ou conteúdo binário
+     * @return string|false Conteúdo binário do PFX ou false em caso de erro
+     */
+    private static function getPfxContent(string $pfxPathOrContent): string|false
+    {
+        // Se for um arquivo existente, lê o conteúdo
+        if (is_file($pfxPathOrContent) && is_readable($pfxPathOrContent)) {
+            $content = file_get_contents($pfxPathOrContent);
+            if ($content !== false && strlen($content) > 0) {
+                return $content;
+            }
+        }
+        
+        // Se não for arquivo, assume que é conteúdo binário
+        // Verifica se tem tamanho mínimo de um PFX válido (geralmente > 1KB)
+        if (strlen($pfxPathOrContent) > 0) {
+            // PFX geralmente tem pelo menos alguns KB
+            // Se for muito pequeno e parecer texto, provavelmente é caminho inválido
+            if (strlen($pfxPathOrContent) < 100 && ctype_print($pfxPathOrContent)) {
+                // Parece ser um caminho de arquivo que não existe
+                throw new CertificateException("Certificado não encontrado: {$pfxPathOrContent}");
+            }
+            
+            // Assume que é conteúdo binário
+            return $pfxPathOrContent;
+        }
+        
+        return false;
     }
 
     public function getCertificate(): string
