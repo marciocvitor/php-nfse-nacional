@@ -14,11 +14,15 @@ use NFSeNacional\Security\Certificate;
 use NFSeNacional\Security\XmlSigner;
 use NFSeNacional\Validator\SchemaType;
 use NFSeNacional\Validator\SchemaValidator;
-use SoapClient;
+use GuzzleHttp\Client;
+use GuzzleHttp\RequestOptions;
 use Throwable;
 
 /**
- * Classe principal para comunicação com o WebService da NFSe Nacional
+ * Classe principal para comunicação com a API REST do Portal Nacional de NFSe
+ * 
+ * O Portal Nacional usa APIs REST (não SOAP/WSDL)
+ * Documentação: https://www.nfse.gov.br/swagger/contribuintesissqn/
  */
 class Tools
 {
@@ -26,6 +30,7 @@ class Tools
     private XmlSigner $signer;
     private SchemaValidator $schemaValidator;
     private Logger $logger;
+    private Client $httpClient;
 
     public function __construct(
         private readonly Config $config,
@@ -35,6 +40,21 @@ class Tools
         $this->signer = new XmlSigner($this->certificate);
         $this->schemaValidator = new SchemaValidator(dirname(__DIR__) . '/Schemas');
         $this->logger = new Logger($logDir);
+        
+        // Configura cliente HTTP REST (Guzzle)
+        // Nota: O Portal Nacional pode exigir autenticação adicional (token, etc.)
+        // Consulte a documentação oficial: https://www.nfse.gov.br/swagger/contribuintesissqn/
+        $this->httpClient = new Client([
+            'base_uri' => $this->config->getApiBaseUrl(),
+            'timeout' => 60,
+            'verify' => $this->config->ambiente === 1, // Verifica SSL apenas em produção
+            // Certificado será usado via stream context se necessário
+            'headers' => [
+                'Content-Type' => 'application/xml',
+                'Accept' => 'application/xml',
+                'User-Agent' => 'PHP-NFSe-Nacional/1.0',
+            ],
+        ]);
     }
     
     /**
@@ -45,8 +65,8 @@ class Tools
         try {
             $this->validateXml($xml, SchemaType::DPS);
             $signedXml = $this->signer->sign($xml);
-            $soapResult = $this->callSoap('RecepcionarDps', $signedXml);
-            $response = $this->buildResponse($soapResult, 'RecepcionarDps');
+            $restResult = $this->callRest('POST', '/nfse', $signedXml);
+            $response = $this->buildResponse($restResult, 'RecepcionarDps');
             
             // Extrai número da DPS do XML para log
             $numeroDps = $this->extractDpsNumber($xml);
@@ -89,8 +109,8 @@ class Tools
             $xmlLote = $this->gerarXmlLote($assinadas, $numeroLote);
             $this->validateXml($xmlLote, SchemaType::LOTE);
             $signedLote = $this->signer->sign($xmlLote, 'LoteRps');
-            $soapResult = $this->callSoap('RecepcionarLoteRps', $signedLote);
-            $response = $this->buildResponse($soapResult, 'RecepcionarLoteRps');
+            $restResult = $this->callRest('POST', '/lote', $signedLote);
+            $response = $this->buildResponse($restResult, 'RecepcionarLoteRps');
             
             $protocolo = $response->dados['parsed']['Protocolo'] ?? null;
             
@@ -116,8 +136,8 @@ class Tools
     {
         try {
             $xml = $this->gerarXmlConsultaLote($protocolo);
-            $soapResult = $this->callSoap('ConsultarLoteRps', $xml);
-            $response = $this->buildResponse($soapResult, 'ConsultarLoteRps');
+            $restResult = $this->callRest('POST', '/lote/consulta', $xml);
+            $response = $this->buildResponse($restResult, 'ConsultarLoteRps');
             
             $situacao = $response->dados['parsed']['Situacao'] ?? null;
             
@@ -142,8 +162,8 @@ class Tools
     {
         try {
             $xml = $this->gerarXmlConsultaNfse($numero);
-            $soapResult = $this->callSoap('ConsultarNfse', $xml);
-            $response = $this->buildResponse($soapResult, 'ConsultarNfse');
+            $restResult = $this->callRest('POST', '/nfse/consulta', $xml);
+            $response = $this->buildResponse($restResult, 'ConsultarNfse');
             
             $this->logger->log('ConsultarNfse', "Consulta realizada para NFSe: {$numero}", [
                 'numero' => $numero,
@@ -167,8 +187,8 @@ class Tools
     {
         try {
             $xml = $this->gerarXmlCancelamento($numero, $motivo);
-            $soapResult = $this->callSoap('CancelarNfse', $xml);
-            $response = $this->buildResponse($soapResult, 'CancelarNfse');
+            $restResult = $this->callRest('POST', '/nfse/cancelamento', $xml);
+            $response = $this->buildResponse($restResult, 'CancelarNfse');
             
             $this->logger->logCancelamento(
                 $numero,
@@ -257,94 +277,83 @@ class Tools
         return 'N/A';
     }
 
-    private function callSoap(string $operation, string $xml): string
+    /**
+     * Faz chamada REST para a API do Portal Nacional de NFSe
+     * 
+     * @param string $method Método HTTP (POST, GET, etc.)
+     * @param string $endpoint Endpoint da API (ex: /nfse, /lote)
+     * @param string $xml XML da requisição (DPS assinada)
+     * @return string XML da resposta
+     */
+    private function callRest(string $method, string $endpoint, string $xml): string
     {
-        $wsdl = $this->config->getWsdl($operation);
-
-        // Verificar se WSDL está configurado
-        if (empty($wsdl)) {
-            throw new CommunicationException(
-                "WSDL não configurado para operação '{$operation}' no ambiente '{$this->config->ambienteNome()}'"
-            );
-        }
-
+        $url = $this->config->getApiEndpoint($endpoint);
+        
         try {
-            // Em homologação, pode ser necessário desabilitar verificação SSL
-            $isHomologacao = $this->config->ambiente === 2;
-            
-            // Configurar contexto de stream para permitir acesso ao WSDL remoto
-            $sslOptions = [
-                'verify_peer' => !$isHomologacao, // Desabilita em homologação se necessário
-                'verify_peer_name' => !$isHomologacao,
-                'allow_self_signed' => $isHomologacao, // Permite em homologação
-            ];
-
-            $streamContext = stream_context_create([
-                'http' => [
-                    'timeout' => 60, // Aumentado para 60 segundos
-                    'user_agent' => 'PHP-SOAP/NFSe-Nacional',
-                    'follow_location' => true,
-                    'max_redirects' => 5,
+            $response = $this->httpClient->request($method, $endpoint, [
+                RequestOptions::BODY => $xml,
+                RequestOptions::HEADERS => [
+                    'Content-Type' => 'application/xml',
+                    'Accept' => 'application/xml',
                 ],
-                'ssl' => $sslOptions
             ]);
 
-            // Verificar se WSDL é acessível antes de criar SoapClient
-            $this->validateWsdlAccessibility($wsdl, $streamContext);
+            $statusCode = $response->getStatusCode();
+            $body = (string) $response->getBody();
 
-            $soapOptions = [
-                'trace' => true,
-                'soap_version' => SOAP_1_2,
-                'exceptions' => true,
-                'cache_wsdl' => WSDL_CACHE_DISK,
-                'local_cert' => $this->certificate->getPemPath(),
-                'passphrase' => $this->certificate->getPassphrase(),
-                'stream_context' => $streamContext,
-                'connection_timeout' => 60,
-            ];
-
-            // Em caso de erro de WSDL, tenta sem cache
-            $client = null;
-            try {
-                $client = new SoapClient($wsdl, $soapOptions);
-            } catch (\SoapFault $e) {
-                if (str_contains($e->getMessage(), 'WSDL') || str_contains($e->getMessage(), 'failed to load')) {
-                    // Tenta sem cache de WSDL
-                    $soapOptions['cache_wsdl'] = WSDL_CACHE_NONE;
-                    $client = new SoapClient($wsdl, $soapOptions);
-                } else {
-                    throw $e;
-                }
+            // Verifica se a resposta é um XML válido
+            if (empty($body) || !str_contains($body, '<')) {
+                throw new CommunicationException(
+                    "Resposta da API não contém XML válido. Status: {$statusCode}"
+                );
             }
 
-            $params = ['nfseDadosMsg' => $xml];
-            $response = $client->__soapCall($operation, [$params]);
+            // Se status não for 2xx, pode ser erro mas ainda retornar XML com mensagem de erro
+            if ($statusCode >= 400) {
+                // Tenta extrair mensagem de erro do XML
+                $simpleXml = @simplexml_load_string($body);
+                if ($simpleXml !== false) {
+                    $mensagemErro = $this->extractErrorMessage($body);
+                    throw new CommunicationException(
+                        "Erro na API (HTTP {$statusCode}): {$mensagemErro}",
+                        $statusCode
+                    );
+                }
+                
+                throw new CommunicationException(
+                    "Erro na API (HTTP {$statusCode}): {$body}",
+                    $statusCode
+                );
+            }
 
-            return $this->extractXmlFromSoapResponse($response);
-        } catch (\SoapFault $e) {
+            return $body;
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
             $mensagem = sprintf(
-                'Falha na operação %s (%s): %s',
-                $operation,
+                'Falha na comunicação com a API (%s): %s',
                 $this->config->ambienteNome(),
                 $e->getMessage()
             );
             
-            // Adiciona detalhes adicionais
-            $mensagem .= "\nWSDL: {$wsdl}";
-            
-            // Se for erro de WSDL, adiciona dicas
-            if (str_contains($e->getMessage(), 'WSDL') || str_contains($e->getMessage(), 'failed to load')) {
-                $mensagem .= "\n\nDicas para resolver:";
-                $mensagem .= "\n1. Verifique se a URL do WSDL está correta";
-                $mensagem .= "\n2. Verifique sua conexão com a internet";
-                $mensagem .= "\n3. Em homologação, pode ser necessário desabilitar verificação SSL";
-                $mensagem .= "\n4. Tente acessar a URL do WSDL no navegador para verificar se está disponível";
+            if ($e->hasResponse()) {
+                $response = $e->getResponse();
+                $statusCode = $response->getStatusCode();
+                $body = (string) $response->getBody();
+                
+                $mensagem .= "\nHTTP Status: {$statusCode}";
+                $mensagem .= "\nURL: {$url}";
+                
+                if (!empty($body)) {
+                    $mensagemErro = $this->extractErrorMessage($body);
+                    if ($mensagemErro) {
+                        $mensagem .= "\nErro: {$mensagemErro}";
+                    }
+                }
             }
             
-            throw new CommunicationException($mensagem, (int) $e->getCode(), $e);
+            throw new CommunicationException($mensagem, (int) ($e->getCode() ?: 500), $e);
         } catch (Throwable $e) {
             throw new CommunicationException(
-                sprintf('Falha na operação %s (%s): %s', $operation, $this->config->ambienteNome(), $e->getMessage()),
+                sprintf('Falha na operação (%s): %s', $this->config->ambienteNome(), $e->getMessage()),
                 (int) $e->getCode(),
                 $e
             );
@@ -352,35 +361,36 @@ class Tools
     }
 
     /**
-     * Valida se o WSDL é acessível (apenas para arquivos locais)
+     * Extrai mensagem de erro do XML de resposta
      */
-    private function validateWsdlAccessibility(string $wsdl, $streamContext): void
+    private function extractErrorMessage(string $xml): ?string
     {
-        // Se for arquivo local, verifica se existe
-        if (!filter_var($wsdl, FILTER_VALIDATE_URL) && !is_file($wsdl)) {
-            throw new CommunicationException(
-                "Arquivo WSDL não encontrado: {$wsdl}"
-            );
-        }
-        // Para URLs, deixa o SoapClient tentar carregar e tratar o erro
-    }
+        try {
+            $simpleXml = @simplexml_load_string($xml);
+            if ($simpleXml === false) {
+                return null;
+            }
 
-    private function extractXmlFromSoapResponse(mixed $response): string
-    {
-        if (is_string($response) && str_contains($response, '<')) {
-            return $response;
-        }
+            // Tenta encontrar mensagem de erro em vários formatos possíveis
+            $patterns = [
+                '//Mensagem',
+                '//MensagemErro',
+                '//Erro',
+                '//Descricao',
+                '//MensagemRetorno',
+            ];
 
-        if (is_object($response)) {
-            $vars = get_object_vars($response);
-            foreach ($vars as $value) {
-                if (is_string($value) && str_contains($value, '<')) {
-                    return $value;
+            foreach ($patterns as $pattern) {
+                $nodes = $simpleXml->xpath($pattern);
+                if (!empty($nodes)) {
+                    return trim((string) $nodes[0]);
                 }
             }
-        }
 
-        throw new CommunicationException('Resposta SOAP não contém payload XML esperado.');
+            return null;
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     private function buildResponse(string $xml, string $contexto): Response

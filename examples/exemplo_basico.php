@@ -14,7 +14,10 @@ use NFSeNacional\Tools\Tools;
 use NFSeNacional\Make\Make;
 
 try {
-    // 1. CONFIGURAÇÃO (usando named arguments do PHP 8.0+)
+    // 1. CONFIGURAÇÃO
+    // Nota: URLs da API são automáticas baseadas no ambiente
+    // Homologação: https://adn.producaorestrita.nfse.gov.br
+    // Produção: https://adn.nfse.gov.br
     $config = Config::fromArray([
         'cnpj' => '12345678901234',
         'im' => '123456',
@@ -23,15 +26,8 @@ try {
         'ambiente' => 2, // 1=Produção, 2=Homologação
         'certPfx' => __DIR__ . '/certificado.pfx',
         'certPassword' => 'senha_certificado',
-        'wsdl' => [
-            'homologacao' => [
-                'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
-                'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
-                'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
-                'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
-                'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
-            ]
-        ]
+        // apiBaseUrl é opcional - usa padrão se não informado
+        // 'apiBaseUrl' => 'https://adn.producaorestrita.nfse.gov.br'
     ]);
     
     $tools = new Tools($config);

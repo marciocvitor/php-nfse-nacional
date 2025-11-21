@@ -17,7 +17,7 @@ class Config
     public readonly string|array $certPfx; // Pode ser caminho do arquivo ou conteúdo binário
     public readonly string $certPassword;
     public readonly bool $validarSchemas;
-    public readonly array $wsdl;
+    public readonly ?string $apiBaseUrl; // URL base da API REST (opcional, usa padrão se não informado)
 
     /**
      * Cria uma instância de Config a partir de um array
@@ -33,7 +33,7 @@ class Config
             certPfx: $data['certPfx'] ?? '',
             certPassword: $data['certPassword'] ?? '',
             validarSchemas: $data['validarSchemas'] ?? true,
-            wsdl: $data['wsdl'] ?? []
+            apiBaseUrl: $data['apiBaseUrl'] ?? null
         );
     }
 
@@ -49,7 +49,7 @@ class Config
         string|array $certPfx,
         string $certPassword,
         bool $validarSchemas,
-        array $wsdl
+        ?string $apiBaseUrl
     ) {
         $this->cnpj = $cnpj;
         $this->im = $im;
@@ -59,34 +59,43 @@ class Config
         $this->certPfx = $certPfx;
         $this->certPassword = $certPassword;
         $this->validarSchemas = $validarSchemas;
-        $this->wsdl = $wsdl;
+        $this->apiBaseUrl = $apiBaseUrl;
     }
 
     /**
-     * Obtém o WSDL para uma operação específica
+     * Obtém a URL base da API REST conforme ambiente
+     * Baseado nas URLs oficiais do Portal Nacional de NFSe
+     * 
+     * @return string URL base da API (ex: https://adn.nfse.gov.br)
      */
-    public function getWsdl(string $operation): string
+    public function getApiBaseUrl(): string
     {
-        $ambienteKey = $this->ambiente == 1 ? 'producao' : 'homologacao';
-        
-        if (isset($this->wsdl[$ambienteKey][$operation])) {
-            return $this->wsdl[$ambienteKey][$operation];
+        // Se foi configurada manualmente, usa ela
+        if (!empty($this->apiBaseUrl)) {
+            return rtrim($this->apiBaseUrl, '/');
         }
         
-        // WSDLs padrão do Portal Nacional
-        // Baseado em padrões comuns de APIs governamentais brasileiras
-        // Se estas URLs não funcionarem, configure manualmente no array $wsdl
-        
+        // URLs oficiais do Portal Nacional de NFSe (ADN)
         if ($this->ambiente == 1) {
             // Produção
-            $baseUrl = 'https://api.nfse.gov.br/wsdl';
+            return 'https://adn.nfse.gov.br';
         } else {
-            // Homologação - tenta variações comuns
-            // Nota: O Portal Nacional pode usar diferentes estruturas de URL
-            $baseUrl = 'https://homologacao.nfse.gov.br/wsdl';
+            // Homologação (Produção Restrita)
+            return 'https://adn.producaorestrita.nfse.gov.br';
         }
-        
-        return $baseUrl . '/' . $operation . '.wsdl';
+    }
+
+    /**
+     * Obtém o endpoint completo para uma operação
+     * 
+     * @param string $endpoint Endpoint da API (ex: /nfse, /lote, /consulta)
+     * @return string URL completa
+     */
+    public function getApiEndpoint(string $endpoint): string
+    {
+        $baseUrl = $this->getApiBaseUrl();
+        $endpoint = ltrim($endpoint, '/');
+        return $baseUrl . '/' . $endpoint;
     }
 
     /**
