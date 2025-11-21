@@ -203,8 +203,8 @@ class Make
     private function buildIdentificacao(\DOMElement $parent): void
     {
         $identificacao = $this->dom->createElement('IdentificacaoDps');
-        $identificacao->appendChild($this->dom->createElement('Numero', $this->identificacao['numero']));
-        $identificacao->appendChild($this->dom->createElement('Serie', $this->identificacao['serie']));
+        $identificacao->appendChild($this->dom->createElement('Numero', (string) $this->identificacao['numero']));
+        $identificacao->appendChild($this->dom->createElement('Serie', (string) $this->identificacao['serie']));
         $identificacao->appendChild($this->dom->createElement('Tipo', (string) $this->identificacao['tipo']));
         $parent->appendChild($identificacao);
     }
@@ -241,13 +241,13 @@ class Make
     {
         $servico = $this->dom->createElement('Servico');
         $valores = $this->dom->createElement('Valores');
-        $valores->appendChild($this->dom->createElement('ValorServicos', $this->servico['valorServicos']));
-        $valores->appendChild($this->dom->createElement('ValorIss', $this->servico['valorIss']));
-        $valores->appendChild($this->dom->createElement('Aliquota', $this->servico['aliquota']));
+        $valores->appendChild($this->dom->createElement('ValorServicos', (string) $this->servico['valorServicos']));
+        $valores->appendChild($this->dom->createElement('ValorIss', (string) $this->servico['valorIss']));
+        $valores->appendChild($this->dom->createElement('Aliquota', (string) $this->servico['aliquota']));
         $servico->appendChild($valores);
-        $servico->appendChild($this->dom->createElement('ItemListaServico', $this->servico['itemListaServico']));
-        $servico->appendChild($this->dom->createElement('CodigoMunicipio', $this->servico['codigoMunicipio']));
-        $servico->appendChild($this->dom->createElement('Discriminacao', $this->servico['discriminacao']));
+        $servico->appendChild($this->dom->createElement('ItemListaServico', (string) $this->servico['itemListaServico']));
+        $servico->appendChild($this->dom->createElement('CodigoMunicipio', (string) $this->servico['codigoMunicipio']));
+        $servico->appendChild($this->dom->createElement('Discriminacao', (string) $this->servico['discriminacao']));
         $servico->appendChild($this->dom->createElement('IssRetido', (string) $this->servico['issRetido']));
 
         return $servico;
