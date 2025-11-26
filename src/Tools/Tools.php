@@ -309,7 +309,9 @@ class Tools
         $url = $this->config->getApiEndpoint($endpoint);
         
         try {
-            $response = $this->httpClient->request($method, $endpoint, [
+            // Usar URL completa ao invés de endpoint relativo
+            // O Guzzle com base_uri pode ter problemas com alguns servidores
+            $response = $this->httpClient->request($method, $url, [
                 RequestOptions::BODY => $xml,
                 RequestOptions::HEADERS => [
                     'Content-Type' => 'application/xml',

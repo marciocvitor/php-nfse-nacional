@@ -66,7 +66,7 @@ class Config
      * Obtém a URL base da API REST conforme ambiente
      * Baseado nas URLs oficiais do Portal Nacional de NFSe
      * 
-     * @return string URL base da API (ex: https://adn.nfse.gov.br)
+     * @return string URL base da API (ex: https://sefin.nfse.gov.br)
      */
     public function getApiBaseUrl(): string
     {
@@ -75,13 +75,14 @@ class Config
             return rtrim($this->apiBaseUrl, '/');
         }
         
-        // URLs oficiais do Portal Nacional de NFSe (ADN)
+        // URLs oficiais do Portal Nacional de NFSe (SEFIN)
+        // Baseado na documentação e relatos de usuários
         if ($this->ambiente == 1) {
             // Produção
-            return 'https://adn.nfse.gov.br';
+            return 'https://sefin.nfse.gov.br';
         } else {
             // Homologação (Produção Restrita)
-            return 'https://adn.producaorestrita.nfse.gov.br';
+            return 'https://sefin.producaorestrita.nfse.gov.br';
         }
     }
 
@@ -95,6 +96,13 @@ class Config
     {
         $baseUrl = $this->getApiBaseUrl();
         $endpoint = ltrim($endpoint, '/');
+        
+        // Adiciona prefixo /sefinnacional se necessário (conforme documentação do Portal Nacional)
+        // O endpoint pode precisar do prefixo /sefinnacional antes do recurso
+        if (!str_starts_with($endpoint, 'sefinnacional/')) {
+            $endpoint = 'sefinnacional/' . $endpoint;
+        }
+        
         return $baseUrl . '/' . $endpoint;
     }
 
