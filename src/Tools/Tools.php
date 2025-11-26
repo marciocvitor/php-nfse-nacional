@@ -69,8 +69,8 @@ class Tools
             'verify' => $this->config->ambiente === 1, // Verifica SSL apenas em produção
             'cert' => $certConfig, // Certificado do cliente para mutual TLS
             'headers' => [
-                'Content-Type' => 'application/xml',
-                'Accept' => 'application/xml',
+                'Content-Type' => 'text/xml; charset=UTF-8',
+                'Accept' => 'text/xml, application/xml',
                 'User-Agent' => 'PHP-NFSe-Nacional/1.0',
             ],
         ]);
@@ -314,8 +314,8 @@ class Tools
             $response = $this->httpClient->request($method, $url, [
                 RequestOptions::BODY => $xml,
                 RequestOptions::HEADERS => [
-                    'Content-Type' => 'application/xml',
-                    'Accept' => 'application/xml',
+                    'Content-Type' => 'text/xml; charset=UTF-8',
+                    'Accept' => 'text/xml, application/xml',
                 ],
             ]);
 
