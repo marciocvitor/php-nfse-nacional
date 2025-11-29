@@ -16,13 +16,15 @@ class Certificate
     private string $passphrase;
     private ?string $pemFile = null;
     private array $meta;
+    private array $extraCerts = []; // Certificados intermediários da cadeia
 
-    private function __construct(string $certificate, string $privateKey, string $passphrase, array $meta)
+    private function __construct(string $certificate, string $privateKey, string $passphrase, array $meta, array $extraCerts = [])
     {
         $this->certificate = $certificate;
         $this->privateKey = $privateKey;
         $this->passphrase = $passphrase;
         $this->meta = $meta;
+        $this->extraCerts = $extraCerts;
     }
 
     /**
@@ -60,7 +62,17 @@ class Certificate
             throw new CertificateException('Certificado expirado');
         }
 
-        return new self($certs['cert'], $certs['pkey'], $passphrase, $parsed);
+        // Extrair certificados intermediários (extraCerts) se existirem no PFX
+        $extraCerts = [];
+        if (!empty($certs['extracerts']) && is_array($certs['extracerts'])) {
+            foreach ($certs['extracerts'] as $extraCert) {
+                if (!empty($extraCert)) {
+                    $extraCerts[] = $extraCert;
+                }
+            }
+        }
+
+        return new self($certs['cert'], $certs['pkey'], $passphrase, $parsed, $extraCerts);
     }
 
     /**
@@ -155,6 +167,28 @@ class Certificate
     public function getPassphrase(): string
     {
         return $this->passphrase;
+    }
+
+    /**
+     * Retorna os certificados intermediários da cadeia
+     * @return array Array de certificados PEM
+     */
+    public function getExtraCerts(): array
+    {
+        return $this->extraCerts;
+    }
+
+    /**
+     * Retorna o certificado principal concatenado com os certificados intermediários
+     * @return string Certificados em formato PEM concatenados
+     */
+    public function getCertificateChain(): string
+    {
+        $chain = $this->certificate;
+        foreach ($this->extraCerts as $extraCert) {
+            $chain .= "\n" . $extraCert;
+        }
+        return $chain;
     }
 }
 

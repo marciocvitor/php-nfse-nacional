@@ -75,8 +75,9 @@ class Config
             return rtrim($this->apiBaseUrl, '/');
         }
         
-        // URLs oficiais do Portal Nacional de NFSe (SEFIN)
-        // Baseado na documentação e relatos de usuários
+        // URLs oficiais do Portal Nacional de NFSe
+        // Conforme documentação oficial e relatos de usuários
+        // O endpoint correto é sefin.producaorestrita.nfse.gov.br/sefinnacional/
         if ($this->ambiente == 1) {
             // Produção
             return 'https://sefin.nfse.gov.br';
@@ -97,10 +98,21 @@ class Config
         $baseUrl = $this->getApiBaseUrl();
         $endpoint = ltrim($endpoint, '/');
         
-        // Adiciona prefixo /sefinnacional se necessário (conforme documentação do Portal Nacional)
-        // O endpoint pode precisar do prefixo /sefinnacional antes do recurso
-        if (!str_starts_with($endpoint, 'sefinnacional/')) {
-            $endpoint = 'sefinnacional/' . $endpoint;
+        // Endpoints diferentes para homologação e produção:
+        // Homologação: https://sefin.producaorestrita.nfse.gov.br/SefinNacional/nfse (sem /API/)
+        // Produção: https://sefin.nfse.gov.br/sefinnacional/nfse (sem /API/)
+        // Conforme documentação: https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/
+        
+        if ($this->ambiente == 1) {
+            // Produção: /sefinnacional/ (minúsculo)
+            if (!str_starts_with($endpoint, 'sefinnacional/')) {
+                $endpoint = 'sefinnacional/' . $endpoint;
+            }
+        } else {
+            // Homologação: /SefinNacional/ (com maiúsculas)
+            if (!str_starts_with($endpoint, 'SefinNacional/')) {
+                $endpoint = 'SefinNacional/' . $endpoint;
+            }
         }
         
         return $baseUrl . '/' . $endpoint;
