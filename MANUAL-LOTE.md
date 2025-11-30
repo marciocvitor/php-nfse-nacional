@@ -28,9 +28,9 @@ Este manual explica o **processo em lote (assíncrono)**.
 1. **Validação de dados** – `DpsValidator` confirma CNPJ/CPF, valores monetários, limites de lista de serviço e campos obrigatórios.
 2. **Validação contra schemas ABRASF** – todo XML (DPS individual e lote) é validado usando os arquivos em `src/Schemas`.
 3. **Assinatura XMLDSig** – cada `InfDps` e o `LoteRps` são assinados automaticamente com o certificado A1 (.pfx) usando `xmlseclibs` (SHA256/RSA).
-4. **Transporte seguro** – o `SoapClient` usa o certificado convertido para PEM, enviando requisições reais (`RecepcionarLoteRps`, `ConsultarLoteRps`, etc.) para os WSDL configurados.
+4. **Transporte seguro** – a biblioteca usa `GuzzleHttp\Client` com certificado digital para autenticação mutual TLS, enviando requisições REST para os endpoints do Portal Nacional.
 
-> ⚠️ Os WSDLs oficiais variam por ambiente. Consulte a documentação do Portal Nacional e preencha `Config::fromArray(['wsdl' => [...]])` com as URLs de homologação e produção vigentes.
+> ⚠️ As URLs da API são configuradas automaticamente baseadas no ambiente. Você pode configurar manualmente usando `apiBaseUrl` se necessário.
 
 ---
 
@@ -114,18 +114,11 @@ $config = Config::fromArray([
     'im' => '123456',
     'cmun' => '3550308',
     'razaosocial' => 'Minha Empresa LTDA',
-    'ambiente' => 2,
-    'certPfx' => __DIR__ . '/certificados/empresa-hom.pfx',
-    'certPassword' => 'senha',
-    'wsdl' => [
-        'homologacao' => [
-            'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
-            'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
-            'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
-            'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
-            'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
-        ]
-    ]
+    'ambiente' => 2, // 1=Produção, 2=Homologação
+        'certPfx' => __DIR__ . '/certificados/empresa-hom.pfx',
+        'certPassword' => 'senha',
+        // URLs da API são automáticas baseadas no ambiente
+        // apiBaseUrl é opcional - usa padrão se não informado
 ]);
 
 $tools = new Tools($config);
@@ -335,18 +328,11 @@ $config = Config::fromArray([
     'im' => '123456',
     'cmun' => '3550308',
     'razaosocial' => 'Minha Empresa LTDA',
-    'ambiente' => 2,
-    'certPfx' => __DIR__ . '/certificados/empresa-hom.pfx',
-    'certPassword' => 'senha',
-    'wsdl' => [
-        'homologacao' => [
-            'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
-            'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
-            'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
-            'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
-            'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
-        ]
-    ]
+    'ambiente' => 2, // 1=Produção, 2=Homologação
+        'certPfx' => __DIR__ . '/certificados/empresa-hom.pfx',
+        'certPassword' => 'senha',
+        // URLs da API são automáticas baseadas no ambiente
+        // apiBaseUrl é opcional - usa padrão se não informado
 ]);
 
 $tools = new Tools($config);

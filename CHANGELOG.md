@@ -7,6 +7,41 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [2.0.0] - 2025-01-XX
+
+### Alterado (Breaking Changes)
+
+- **Migração completa de SOAP/WSDL para REST API** - O Portal Nacional usa APIs REST, não SOAP
+- Removida configuração de `wsdl` - URLs são automáticas baseadas no ambiente
+- URLs da API configuradas automaticamente:
+  - Homologação: `https://sefin.producaorestrita.nfse.gov.br`
+  - Produção: `https://sefin.nfse.gov.br`
+- Formato de envio de DPS: XML compactado em GZIP e codificado em Base64 (campo `dpsXmlGZipB64`)
+- Endpoints REST: `/SefinNacional/nfse`, `/SefinNacional/lote`, etc.
+
+### Adicionado
+
+- Método `consultarDps()` - Consulta DPS por ID para obter chave de acesso
+- Método `consultarNfsePorChave()` - Consulta NFSe pela chave de acesso
+- Método `baixarDanfse()` - Baixa DANFSe (PDF) oficial diretamente da API
+- Suporte a compressão GZIP+Base64 para envio de DPS
+- Configuração opcional `apiBaseUrl` para URLs customizadas
+- Método `getDPSXML()` na classe `Make` - Gera XML apenas da DPS (sem wrapper NFSe/infNFSe)
+
+### Removido
+
+- `SoapClient` - Removido completamente
+- Método `callSoap()` - Substituído por `callRest()`
+- Método `getWsdl()` - Não é mais necessário
+- Configuração de `wsdl` no `Config` - URLs são automáticas
+- Extensão PHP `ext-soap` - Não é mais necessária
+
+### Nota Técnica
+
+- **Migração REST API**: Adaptação para a arquitetura REST do Portal Nacional de NFSe
+
+---
+
 ## [1.0.0] - 2025-11-14
 
 ### Adicionado

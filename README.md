@@ -37,7 +37,7 @@ composer install
 
 ## Uso Básico
 
-### Emissão Individual (Síncrona)\n
+### Emissão Individual (Síncrona)
 
 ```php
 <?php
@@ -49,6 +49,9 @@ use NFSeNacional\Tools\Tools;
 use NFSeNacional\Make\Make;
 
 // Configuração
+// Nota: URLs da API são automáticas baseadas no ambiente
+// Homologação: https://sefin.producaorestrita.nfse.gov.br
+// Produção: https://sefin.nfse.gov.br
 $config = Config::fromArray([
     'cnpj' => '12345678901234',
     'im' => '123456',
@@ -57,22 +60,8 @@ $config = Config::fromArray([
     'ambiente' => 2, // 1=Produção, 2=Homologação
     'certPfx' => __DIR__ . '/certificados/empresa-hom.pfx',
     'certPassword' => 'senha',
-    'wsdl' => [
-        'homologacao' => [
-            'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
-            'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
-            'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
-            'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
-            'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
-        ],
-        'producao' => [
-            'RecepcionarDps' => 'https://api.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
-            'RecepcionarLoteRps' => 'https://api.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
-            'ConsultarLoteRps' => 'https://api.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
-            'ConsultarNfse' => 'https://api.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
-            'CancelarNfse' => 'https://api.nfse.gov.br/wsdl/CancelarNfse.wsdl'
-        ]
-    ]
+    // apiBaseUrl é opcional - usa padrão se não informado
+    // 'apiBaseUrl' => 'https://sefin.producaorestrita.nfse.gov.br'
 ]);
 
 $tools = new Tools($config);
@@ -138,37 +127,42 @@ echo "NFS-e geradas: " . count($resultado->dados['parsed']['ListaNfse'] ?? []) .
 - Extensões PHP:
   - `ext-json`
   - `ext-openssl`
-  - `ext-soap`
   - `ext-dom`
   - `ext-simplexml`
   - `ext-libxml`
+  - `ext-zlib` (para compressão GZIP)
 - Dependências adicionais:
   - `guzzlehttp/guzzle`
   - `justinrainbow/json-schema`
   - `robrichards/xmlseclibs`
 
-### Endpoints (WSDL)
+### Endpoints da API REST
 
-O Portal Nacional publica WSDLs diferentes para homologação e produção. Informe-os no array `wsdl` da configuração:
+O Portal Nacional usa **APIs REST** (não SOAP/WSDL). As URLs são configuradas automaticamente baseadas no ambiente:
+
+- **Homologação:** `https://sefin.producaorestrita.nfse.gov.br`
+- **Produção:** `https://sefin.nfse.gov.br`
+
+Você pode configurar manualmente se necessário:
 
 ```php
-'wsdl' => [
-    'homologacao' => [
-        'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
-        'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
-        'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
-        'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
-        'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
-    ],
-    'producao' => [
-        // URLs oficiais de produção
-    ]
-]
+$config = Config::fromArray([
+    // ... outros parâmetros
+    'apiBaseUrl' => 'https://sefin.producaorestrita.nfse.gov.br' // opcional
+]);
 ```
 
-> Consulte o [Portal Nacional de NFSe](https://www.gov.br/nfse/pt-br) para obter as URLs mais recentes.
+**Endpoints disponíveis:**
+- `POST /SefinNacional/nfse` - Enviar DPS individual (síncrono)
+- `POST /SefinNacional/lote` - Enviar lote de DPS (assíncrono)
+- `POST /SefinNacional/lote/consulta` - Consultar resultado do lote
+- `POST /SefinNacional/nfse/consulta` - Consultar NFSe individual
+- `GET /SefinNacional/dps/{idDps}` - Consultar DPS por ID
+- `GET /SefinNacional/nfse/{chaveAcesso}` - Consultar NFSe por chave de acesso
+- `GET /SefinNacional/danfse/{chaveAcesso}` - Baixar DANFSe (PDF)
+- `POST /SefinNacional/nfse/{chaveAcesso}/eventos` - Cancelar NFSe
 
-**💡 Dica:** Use o script `test_wsdl_urls.php` para testar automaticamente várias variações de URLs e identificar quais estão acessíveis. Veja [TESTE-WSDL.md](TESTE-WSDL.md) para mais detalhes.
+> Consulte a [documentação oficial do Portal Nacional](https://www.gov.br/nfse/pt-br) e o [Swagger da API](https://www.nfse.gov.br/swagger/contribuintesissqn/) para mais detalhes.
 
 ---
 
@@ -211,14 +205,18 @@ php-nfse-nacional/
 
 - [x] Assinatura digital XML (XMLDSig SHA256/RSA) com certificados A1
 - [x] Validação pré-envio contra schemas oficiais ABRASF
-- [x] Envio de DPS (`RecepcionarDps`)
-- [x] Envio de lote (até 50 DPS) (`RecepcionarLoteRps`)
-- [x] Consulta de lote (`ConsultarLoteRps`)
+- [x] Envio de DPS individual (síncrono) via REST API
+- [x] Envio de lote (até 50 DPS) via REST API (assíncrono)
+- [x] Consulta de lote por protocolo
 - [x] Consulta de NFSe (`ConsultarNfse`)
+- [x] Consulta de DPS por ID (`consultarDps`)
+- [x] Consulta de NFSe por chave de acesso (`consultarNfsePorChave`)
 - [x] Cancelamento (`CancelarNfse`)
-- [x] Configuração de ambientes com WSDL dedicados
+- [x] Download de DANFSe oficial da API (`baixarDanfse`)
+- [x] Configuração automática de URLs baseada no ambiente
 - [x] Sistema de log com versão e NT (similar ao nfephp-org)
 - [x] Geração de DANFSe/PDF (Documento Auxiliar da NFSe)
+- [x] API REST (migração completa de SOAP para REST)
 - [ ] Integração com filas/persistência (em desenvolvimento)
 
 ---

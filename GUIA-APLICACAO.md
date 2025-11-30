@@ -190,18 +190,8 @@ class EmissaoNfse
             'ambiente' => 2, // 1=Produção, 2=Homologação
             'certPfx' => __DIR__ . '/../certificados/empresa.pfx',
             'certPassword' => 'senha_do_certificado',
-            'wsdl' => [
-                'homologacao' => [
-                    'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
-                    'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
-                    'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
-                    'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
-                    'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
-                ],
-                'producao' => [
-                    // URLs de produção (obter no Portal Nacional)
-                ]
-            ]
+            // URLs da API são automáticas baseadas no ambiente
+            // apiBaseUrl é opcional - usa padrão se não informado
         ]);
         
         $this->tools = new Tools($config);
@@ -297,17 +287,22 @@ Antes de usar, certifique-se de ter:
 - [ ] Certificado digital A1 (.pfx) válido
 - [ ] Senha do certificado
 - [ ] CNPJ e Inscrição Municipal cadastrados no Portal Nacional
-- [ ] URLs dos WSDLs (homologação e/ou produção)
 - [ ] Ambiente configurado (1=Produção, 2=Homologação)
+- [ ] URLs da API são automáticas (ou configure manualmente via `apiBaseUrl`)
 
 ---
 
-## Obtendo URLs dos WSDLs
+## URLs da API REST
 
-1. Acesse: https://www.gov.br/nfse/pt-br
-2. Navegue até a seção de **Documentação Técnica**
-3. Baixe o manual com as URLs dos WSDLs
-4. Configure no array `wsdl` da configuração
+As URLs da API são configuradas automaticamente baseadas no ambiente:
+- **Homologação:** `https://sefin.producaorestrita.nfse.gov.br`
+- **Produção:** `https://sefin.nfse.gov.br`
+
+Você pode configurar manualmente se necessário usando o parâmetro `apiBaseUrl` na configuração.
+
+Para mais informações, consulte:
+- [Portal Nacional de NFSe](https://www.gov.br/nfse/pt-br)
+- [Swagger da API](https://www.nfse.gov.br/swagger/contribuintesissqn/)
 
 ---
 

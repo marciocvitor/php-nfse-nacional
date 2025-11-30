@@ -121,17 +121,11 @@ $config = Config::fromArray([
     'im' => '123456',
     'cmun' => '3550308',
     'razaosocial' => 'Minha Empresa LTDA',
-    'ambiente' => 2,
+    'ambiente' => 2, // 1=Produç?o, 2=Homologaç?o
     'certPfx' => __DIR__ . '/certificado.pfx',
     'certPassword' => 'senha',
-    'wsdl' => [
-        'homologacao' => [
-            'RecepcionarDps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarDps.wsdl',
-            'RecepcionarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/RecepcionarLoteRps.wsdl',
-            'ConsultarLoteRps' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarLoteRps.wsdl',
-            'ConsultarNfse' => 'https://homologacao.nfse.gov.br/wsdl/ConsultarNfse.wsdl',
-            'CancelarNfse' => 'https://homologacao.nfse.gov.br/wsdl/CancelarNfse.wsdl'
-        ]
+    // URLs da API s?o automáticas baseadas no ambiente
+    // apiBaseUrl é opcional - usa padr?o se n?o informado
     ]
 ]);
 
