@@ -118,7 +118,10 @@ class DpsValidator
         }
         
         // Endereço - se tiver endereço, deve ter cMun e CEP
-        if (!empty($tomador['endereco']) || !empty($tomador['cep'])) {
+        $codigoMunicipio = '';
+        $cep = '';
+        if (!empty($tomador['endereco']) || !empty($tomador['cep']) || !empty($tomador['numero']) || !empty($tomador['bairro'])) {
+            // Se tiver qualquer campo de endereço, validar cMun e CEP
             $codigoMunicipio = preg_replace('/[^0-9]/', '', $tomador['codigoMunicipio'] ?? '');
             if (empty($codigoMunicipio)) {
                 $errors[] = 'Código do município do tomador é obrigatório quando há endereço';
@@ -132,6 +135,10 @@ class DpsValidator
             } elseif (strlen($cep) !== 8) {
                 $errors[] = 'CEP do tomador inválido (deve ter 8 dígitos)';
             }
+        } else {
+            // Se não tiver endereço, não processar codigoMunicipio e cep (deixar vazios)
+            $codigoMunicipio = '';
+            $cep = '';
         }
         
         if (!empty($errors)) {
@@ -149,8 +156,8 @@ class DpsValidator
             'bairro' => $tomador['bairro'] ?? '',
             'municipio' => $tomador['municipio'] ?? '',
             'uf' => $tomador['uf'] ?? '',
-            'cep' => preg_replace('/[^0-9]/', '', $tomador['cep'] ?? ''),
-            'codigoMunicipio' => preg_replace('/[^0-9]/', '', $tomador['codigoMunicipio'] ?? ''),
+            'cep' => $cep, // Usar variável processada, não ternário que mascara vazio
+            'codigoMunicipio' => $codigoMunicipio, // Usar variável processada, não ternário que mascara vazio
         ];
     }
 
