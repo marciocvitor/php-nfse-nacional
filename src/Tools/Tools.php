@@ -75,7 +75,7 @@ class Tools
             ],
         ]);
     }
-
+    
     /**
      * Envia uma DPS individual (SÍNCRONO)
      */
@@ -89,17 +89,17 @@ class Tools
             $xmlResult = $restResult['xml'];
             $chaveAcesso = $restResult['chaveAcesso'] ?? null;
             $response = $this->buildResponse($xmlResult, 'RecepcionarDps', $chaveAcesso);
-
+            
             // Extrai número da DPS do XML para log
             $numeroDps = $this->extractDpsNumber($xml);
-
+            
             $this->logger->logEnvioDps(
                 $numeroDps,
                 $response->sucesso,
                 $response->numero,
                 $response->sucesso ? null : $response->mensagem
             );
-
+            
             return $response;
         } catch (Throwable $e) {
             $numeroDps = $this->extractDpsNumber($xml);
@@ -107,7 +107,7 @@ class Tools
             throw $e;
         }
     }
-
+    
     /**
      * Envia lote de DPS (ASSÍNCRONO)
      */
@@ -117,17 +117,17 @@ class Tools
             if (empty($listaDps)) {
                 throw new ValidationException('Lista de DPS vazia');
             }
-
+            
             if (count($listaDps) > 50) {
                 throw new ValidationException('Limite máximo de 50 DPS por lote excedido');
             }
-
+            
             $assinadas = [];
             foreach ($listaDps as $dpsXml) {
                 $this->validateXml($dpsXml, SchemaType::DPS);
                 $assinadas[] = $this->signer->sign($dpsXml);
             }
-
+            
             $xmlLote = $this->gerarXmlLote($assinadas, $numeroLote);
             $this->validateXml($xmlLote, SchemaType::LOTE);
             $signedLote = $this->signer->sign($xmlLote, 'LoteRps');
@@ -135,9 +135,9 @@ class Tools
             $xmlResult = $restResult['xml'];
             $chaveAcesso = $restResult['chaveAcesso'] ?? null;
             $response = $this->buildResponse($xmlResult, 'RecepcionarLoteRps', $chaveAcesso);
-
+            
             $protocolo = $response->dados['parsed']['Protocolo'] ?? null;
-
+            
             $this->logger->logEnvioLote(
                 $numeroLote,
                 count($listaDps),
@@ -145,14 +145,14 @@ class Tools
                 $protocolo ? (string) $protocolo : null,
                 $response->sucesso ? null : $response->mensagem
             );
-
+            
             return $response;
         } catch (Throwable $e) {
             $this->logger->logEnvioLote($numeroLote, count($listaDps), false, null, $e->getMessage());
             throw $e;
         }
     }
-
+    
     /**
      * Consulta resultado de um lote pelo protocolo (ASSÍNCRONO)
      */
@@ -164,23 +164,23 @@ class Tools
             $xmlResult = $restResult['xml'];
             $chaveAcesso = $restResult['chaveAcesso'] ?? null;
             $response = $this->buildResponse($xmlResult, 'ConsultarLoteRps', $chaveAcesso);
-
+            
             $situacao = $response->dados['parsed']['Situacao'] ?? null;
-
+            
             $this->logger->logConsultaLote(
                 $protocolo,
                 $response->sucesso,
                 $situacao ? (string) $situacao : null,
                 $response->sucesso ? null : $response->mensagem
             );
-
+            
             return $response;
         } catch (Throwable $e) {
             $this->logger->logConsultaLote($protocolo, false, null, $e->getMessage());
             throw $e;
         }
     }
-
+    
     /**
      * Consulta NFSe individual por número (SÍNCRONO)
      */
@@ -192,12 +192,12 @@ class Tools
             $xmlResult = $restResult['xml'];
             $chaveAcesso = $restResult['chaveAcesso'] ?? null;
             $response = $this->buildResponse($xmlResult, 'ConsultarNfse', $chaveAcesso);
-
+            
             $this->logger->log('ConsultarNfse', "Consulta realizada para NFSe: {$numero}", [
                 'numero' => $numero,
                 'sucesso' => $response->sucesso
             ]);
-
+            
             return $response;
         } catch (Throwable $e) {
             $this->logger->log('ConsultarNfse', "Falha ao consultar NFSe: {$numero}", [
@@ -207,7 +207,7 @@ class Tools
             throw $e;
         }
     }
-
+    
     /**
      * Cancela NFSe individual via API de Eventos
      * 
@@ -240,13 +240,13 @@ class Tools
             $restResult = $this->callRestEvento('POST', '/nfse/' . $chaveAcesso . '/eventos', $xmlEventoAssinado);
             $xmlResult = $restResult['xml'];
             $response = $this->buildResponse($xmlResult, 'CancelarNfse', $chaveAcesso);
-
+            
             $this->logger->logCancelamento(
                 $chaveAcesso,
                 $response->sucesso,
                 $response->sucesso ? null : $response->mensagem
             );
-
+            
             return $response;
         } catch (Throwable $e) {
             $this->logger->logCancelamento($chaveAcesso, false, $e->getMessage());
@@ -533,7 +533,7 @@ class Tools
         $generator = new DanfseGenerator();
         return $generator->gerarBase64($response, $dadosAdicionais);
     }
-
+    
     private function validateXml(string $xml, SchemaType $schemaType): void
     {
         if (!$this->config->validarSchemas) {
@@ -565,7 +565,7 @@ class Tools
         } catch (Throwable) {
             // Ignora erros de parsing
         }
-
+        
         return 'N/A';
     }
 
@@ -665,7 +665,7 @@ class Tools
 
             // Verifica se a resposta é um XML válido
             if (empty($body) || !str_contains($body, '<')) {
-                throw new CommunicationException(
+            throw new CommunicationException(
                     "Resposta da API não contém XML válido. Status: {$statusCode}. Resposta: " . substr($body, 0, 500)
                 );
             }
@@ -717,6 +717,13 @@ class Tools
                                 $erroFormatado .= "\n1. Se o código LC116 está correto e ativo";
                                 $erroFormatado .= "\n2. Se o código está na lista oficial do Portal Nacional";
                                 $erroFormatado .= "\n3. Se o código está habilitado para o município de emissão";
+                            } elseif ($codigo === 'RNG9997') {
+                                // Extrair informações do erro de schema
+                                $mensagemDetalhada = $this->extrairErroSchema($complemento ?: $descricao);
+                                if ($mensagemDetalhada) {
+                                    $erroFormatado = $codigo ? "[{$codigo}] " : '';
+                                    $erroFormatado .= $mensagemDetalhada;
+                                }
                             }
                             $erros[] = $erroFormatado;
                             if (!empty($codigo) || !empty($descricao)) {
@@ -724,7 +731,8 @@ class Tools
                             }
                         }
                         if ($temErrosEstruturados) {
-                            $mensagemErro = implode("\n", $erros);
+                            // Quando há erros estruturados, retorna apenas a mensagem limpa
+                            $mensagemErro = "Resposta da API: " . implode("\n", $erros);
                         } else {
                             // Se não houver código/descrição, mantém comportamento antigo
                             $mensagemErro = implode("\n", $erros);
@@ -744,7 +752,13 @@ class Tools
                     }
                 }
 
-                // Adiciona o XML completo enviado na mensagem de erro (formatado)
+                // Se a mensagem de erro já contém "Resposta da API:" (erros estruturados), 
+                // retorna apenas essa parte limpa, sem detalhes técnicos
+                if (strpos($mensagemErro, 'Resposta da API:') !== false) {
+                    throw new CommunicationException($mensagemErro, $statusCode);
+                }
+
+                // Para outros tipos de erro, adiciona detalhes técnicos
                 $xmlFormatado = $this->formatXml($xmlOriginal);
                 $mensagemCompleta = "Erro na API (HTTP {$statusCode}): {$mensagemErro}";
                 $mensagemCompleta .= "\n\n=== XML ENVIADO ===\n" . $xmlFormatado;
@@ -787,13 +801,25 @@ class Tools
                                 if ($complemento) {
                                     $erroFormatado .= ' - ' . $complemento;
                                 }
+
+                                // Mensagens específicas para erros comuns
+                                if ($codigo === 'RNG9997') {
+                                    // Extrair informações do erro de schema
+                                    $mensagemDetalhada = $this->extrairErroSchema($complemento ?: $descricao);
+                                    if ($mensagemDetalhada) {
+                                        $erroFormatado = $codigo ? "[{$codigo}] " : '';
+                                        $erroFormatado .= $mensagemDetalhada;
+                                    }
+                                }
+
                                 $erros[] = $erroFormatado;
                                 if (!empty($codigo) || !empty($descricao)) {
                                     $temErrosEstruturados = true;
                                 }
                             }
                             if ($temErrosEstruturados) {
-                                $mensagem .= "\nResposta da API: " . implode("\n", $erros);
+                                // Quando há erros estruturados, retorna apenas a mensagem limpa
+                                $mensagem = "Resposta da API: " . implode("\n", $erros);
                             } else {
                                 $mensagem .= "\nResposta da API: " . implode("\n", $erros);
                                 $mensagem .= "\n\nResposta completa da API:\n" . json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -814,7 +840,13 @@ class Tools
                 }
             }
 
-            // Adiciona o XML completo enviado na mensagem de erro (formatado)
+            // Se a mensagem já contém "Resposta da API:" (erros estruturados), 
+            // retorna apenas essa parte limpa, sem detalhes técnicos
+            if (strpos($mensagem, 'Resposta da API:') !== false && strpos($mensagem, 'Falha na comunicação') === false) {
+                throw new CommunicationException($mensagem, (int) ($e->getCode() ?: 500), $e);
+            }
+
+            // Para outros tipos de erro, adiciona detalhes técnicos
             $xmlFormatado = $this->formatXml($xmlOriginal);
             $mensagem .= "\n\n=== XML ENVIADO ===\n" . $xmlFormatado;
 
@@ -891,6 +923,78 @@ class Tools
         }
     }
 
+    /**
+     * Extrai e formata erros de schema (RNG9997) de forma mais clara para o usuário
+     * 
+     * @param string $mensagemErro Mensagem de erro completa do schema
+     * @return string Mensagem formatada e clara para o usuário
+     */
+    private function extrairErroSchema(string $mensagemErro): string
+    {
+        $mensagem = "Erro de validação do XML conforme schema do Portal Nacional.\n\n";
+        
+        // Extrair nome do elemento que está com problema
+        if (preg_match("/The '([^']+)' element is invalid/i", $mensagemErro, $matches)) {
+            $elemento = $matches[1];
+            // Remover namespace para facilitar leitura
+            $elemento = preg_replace('/^.*:/', '', $elemento);
+            
+            // Mapear elementos conhecidos para mensagens mais claras
+            $mapeamentoElementos = [
+                'xNome' => 'Nome/Razão Social do Tomador',
+                'xRazaoSocial' => 'Razão Social do Prestador',
+                'xNomeFantasia' => 'Nome Fantasia',
+                'xLgr' => 'Logradouro (Rua/Avenida)',
+                'nro' => 'Número do Endereço',
+                'xBairro' => 'Bairro',
+                'cMun' => 'Código do Município (IBGE)',
+                'CEP' => 'CEP',
+                'fone' => 'Telefone',
+                'email' => 'E-mail',
+            ];
+            
+            $nomeAmigavel = $mapeamentoElementos[$elemento] ?? $elemento;
+            
+            // Verificar se é erro de valor vazio
+            if (preg_match("/The value '' is invalid|actual length is less than the MinLength/i", $mensagemErro)) {
+                $mensagem .= "PROBLEMA IDENTIFICADO:\n";
+                $mensagem .= "O campo '{$nomeAmigavel}' está vazio ou não foi preenchido.\n\n";
+                $mensagem .= "SOLUÇÃO:\n";
+                
+                if ($elemento === 'xNome') {
+                    $mensagem .= "1. Verifique o cadastro do cliente (tomador) no sistema\n";
+                    $mensagem .= "2. Certifique-se de que o campo 'Razão Social' ou 'Nome' está preenchido\n";
+                    $mensagem .= "3. Se o cliente não tiver razão social, use o nome completo\n";
+                    $mensagem .= "4. O campo não pode estar vazio conforme exigência do Portal Nacional\n";
+                } else {
+                    $mensagem .= "1. Verifique o cadastro do cliente no sistema\n";
+                    $mensagem .= "2. Preencha o campo '{$nomeAmigavel}' corretamente\n";
+                    $mensagem .= "3. O campo é obrigatório conforme schema do Portal Nacional\n";
+                }
+            } elseif (preg_match("/invalid according to its datatype/i", $mensagemErro)) {
+                $mensagem .= "PROBLEMA IDENTIFICADO:\n";
+                $mensagem .= "O campo '{$nomeAmigavel}' contém um valor inválido.\n\n";
+                $mensagem .= "SOLUÇÃO:\n";
+                $mensagem .= "1. Verifique o formato do campo '{$nomeAmigavel}'\n";
+                $mensagem .= "2. Certifique-se de que o valor está no formato correto\n";
+            } else {
+                $mensagem .= "PROBLEMA IDENTIFICADO:\n";
+                $mensagem .= "O campo '{$nomeAmigavel}' não está conforme o schema esperado.\n\n";
+                $mensagem .= "DETALHES TÉCNICOS:\n";
+                $mensagem .= $mensagemErro;
+            }
+        } else {
+            // Se não conseguir extrair o elemento, mostra a mensagem original formatada
+            $mensagem .= "PROBLEMA IDENTIFICADO:\n";
+            $mensagem .= $mensagemErro . "\n\n";
+            $mensagem .= "SOLUÇÃO:\n";
+            $mensagem .= "1. Verifique todos os campos obrigatórios do cadastro do cliente\n";
+            $mensagem .= "2. Certifique-se de que todos os dados estão preenchidos corretamente\n";
+        }
+        
+        return $mensagem;
+    }
+
     private function buildResponse(string $xml, string $contexto, ?string $chaveAcessoJson = null): Response
     {
         $dados = [
@@ -933,7 +1037,7 @@ class Tools
             xml: $xml
         );
     }
-
+    
     /**
      * Gera XML do lote de DPS
      */
@@ -947,7 +1051,7 @@ class Tools
         $xml .= '<InscricaoMunicipal>' . $this->config->im . '</InscricaoMunicipal>';
         $xml .= '<QuantidadeRps>' . count($listaDps) . '</QuantidadeRps>';
         $xml .= '<ListaRps>';
-
+        
         foreach ($listaDps as $dps) {
             $xml .= '<Rps>';
             $xml .= str_replace(
@@ -957,11 +1061,11 @@ class Tools
             );
             $xml .= '</Rps>';
         }
-
+        
         $xml .= '</ListaRps>';
         $xml .= '</LoteRps>';
         $xml .= '</EnviarLoteRpsEnvio>';
-
+        
         return $xml;
     }
 
@@ -1142,6 +1246,7 @@ class Tools
                         $mensagemErro = $jsonData['message'];
                     } elseif (isset($jsonData['erros']) && is_array($jsonData['erros'])) {
                         $erros = [];
+                        $temErrosEstruturados = false;
                         foreach ($jsonData['erros'] as $erro) {
                             $codigo = $erro['Codigo'] ?? '';
                             $descricao = $erro['Descricao'] ?? '';
@@ -1153,8 +1258,16 @@ class Tools
                                 $linha .= ' - ' . $complemento;
                             }
                             $erros[] = $linha;
+                            if (!empty($codigo) || !empty($descricao)) {
+                                $temErrosEstruturados = true;
+                            }
                         }
-                        $mensagemErro = implode("\n", $erros);
+                        if ($temErrosEstruturados) {
+                            // Quando há erros estruturados, retorna apenas a mensagem limpa
+                            $mensagemErro = "Resposta da API: " . implode("\n", $erros);
+                        } else {
+                            $mensagemErro = implode("\n", $erros);
+                        }
                     } else {
                         $mensagemErro = json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
                     }
@@ -1162,6 +1275,13 @@ class Tools
                     $mensagemErro = substr($body, 0, 1000);
                 }
 
+                // Se a mensagem de erro já contém "Resposta da API:" (erros estruturados), 
+                // retorna apenas essa parte limpa, sem detalhes técnicos
+                if (strpos($mensagemErro, 'Resposta da API:') !== false) {
+                    throw new CommunicationException($mensagemErro, $statusCode);
+                }
+
+                // Para outros tipos de erro, adiciona detalhes técnicos
                 $xmlFormatado = $this->formatXml($xmlOriginal);
                 $mensagemCompleta = "Erro na API de Eventos (HTTP {$statusCode}): {$mensagemErro}";
                 $mensagemCompleta .= "\n\n=== XML ENVIADO (antes do GZIP) ===\n" . $xmlFormatado;
@@ -1197,19 +1317,77 @@ class Tools
 
             return ['xml' => $conteudoXml, 'chaveAcesso' => null];
         } catch (\GuzzleHttp\Exception\RequestException $e) {
-            $mensagem = sprintf(
-                'Falha na comunicação com a API de Eventos (%s): %s',
-                $this->config->ambienteNome(),
-                $e->getMessage()
-            );
+            $mensagem = '';
 
             if ($e->hasResponse()) {
                 $response = $e->getResponse();
                 $statusCode = $response->getStatusCode();
                 $body = (string) $response->getBody();
-                $mensagem .= "\nHTTP Status: {$statusCode}\nURL: {$url}\nResposta: {$body}";
+
+                // Tenta decodificar JSON primeiro
+                $jsonData = @json_decode($body, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
+                    // Extrai mensagens de erro do JSON
+                    if (isset($jsonData['erros']) && is_array($jsonData['erros'])) {
+                        $erros = [];
+                        $temErrosEstruturados = false;
+                        foreach ($jsonData['erros'] as $erro) {
+                            $codigo = $erro['Codigo'] ?? '';
+                            $descricao = $erro['Descricao'] ?? '';
+                            $complemento = $erro['Complemento'] ?? '';
+
+                            $linha = $codigo ? "[{$codigo}] " : '';
+                            $linha .= $descricao;
+                            if ($complemento) {
+                                $linha .= ' - ' . $complemento;
+                            }
+                            $erros[] = $linha;
+                            if (!empty($codigo) || !empty($descricao)) {
+                                $temErrosEstruturados = true;
+                            }
+                        }
+                        if ($temErrosEstruturados) {
+                            // Quando há erros estruturados, retorna apenas a mensagem limpa
+                            $mensagem = "Resposta da API: " . implode("\n", $erros);
+                        } else {
+                            $mensagem = sprintf(
+                                'Falha na comunicação com a API de Eventos (%s): %s',
+                                $this->config->ambienteNome(),
+                                $e->getMessage()
+                            );
+                            $mensagem .= "\nHTTP Status: {$statusCode}\nURL: {$url}\nResposta: {$body}";
+                        }
+                    } else {
+                        $mensagem = sprintf(
+                            'Falha na comunicação com a API de Eventos (%s): %s',
+                            $this->config->ambienteNome(),
+                            $e->getMessage()
+                        );
+                        $mensagem .= "\nHTTP Status: {$statusCode}\nURL: {$url}\nResposta: {$body}";
+                    }
+                } else {
+                    $mensagem = sprintf(
+                        'Falha na comunicação com a API de Eventos (%s): %s',
+                        $this->config->ambienteNome(),
+                        $e->getMessage()
+                    );
+                    $mensagem .= "\nHTTP Status: {$statusCode}\nURL: {$url}\nResposta: {$body}";
+                }
+            } else {
+                $mensagem = sprintf(
+                    'Falha na comunicação com a API de Eventos (%s): %s',
+                    $this->config->ambienteNome(),
+                    $e->getMessage()
+                );
             }
 
+            // Se a mensagem já contém "Resposta da API:" (erros estruturados), 
+            // retorna apenas essa parte limpa, sem detalhes técnicos
+            if (strpos($mensagem, 'Resposta da API:') !== false) {
+                throw new CommunicationException($mensagem, (int)($e->getCode() ?: 500), $e);
+            }
+
+            // Para outros tipos de erro, adiciona detalhes técnicos
             $xmlFormatado = $this->formatXml($xmlOriginal);
             $mensagem .= "\n\n=== XML ENVIADO (antes do GZIP) ===\n" . $xmlFormatado;
 

@@ -52,6 +52,40 @@ class Make
         $this->validator = $validator ?? new DpsValidator();
     }
     
+    /**
+     * Cria um elemento XML com escape seguro de caracteres especiais
+     * Garante que caracteres como &, <, >, ", ' sejam escapados corretamente
+     * 
+     * @param string $name Nome do elemento
+     * @param string $value Valor do elemento (será escapado automaticamente)
+     * @return \DOMElement
+     */
+    private function createElementSafe(string $name, string $value): \DOMElement
+    {
+        $element = $this->dom->createElement($name);
+        // Usar createTextNode para garantir escape correto de caracteres especiais XML
+        // Isso é mais seguro que passar o valor diretamente no createElement
+        $textNode = $this->dom->createTextNode($value);
+        $element->appendChild($textNode);
+        return $element;
+    }
+    
+    /**
+     * Cria um elemento XML com escape seguro para um DOMDocument externo
+     * 
+     * @param DOMDocument $dom DOMDocument a ser usado
+     * @param string $name Nome do elemento
+     * @param string $value Valor do elemento (será escapado automaticamente)
+     * @return \DOMElement
+     */
+    private function createElementSafeForDOM(DOMDocument $dom, string $name, string $value): \DOMElement
+    {
+        $element = $dom->createElement($name);
+        $textNode = $dom->createTextNode($value);
+        $element->appendChild($textNode);
+        return $element;
+    }
+    
     public function setIdentificacao(array $identificacao): self
     {
         $this->identificacao = array_merge($this->identificacao, [
@@ -639,7 +673,8 @@ class Make
             }
             
             if (!empty($this->tomador['razaoSocial'])) {
-                $toma->appendChild($dom->createElement('xNome', (string)$this->tomador['razaoSocial']));
+                // Usar createElementSafeForDOM para garantir escape correto de caracteres especiais XML
+                $toma->appendChild($this->createElementSafeForDOM($dom, 'xNome', (string)$this->tomador['razaoSocial']));
             }
             
             // end (endereço)
@@ -658,7 +693,7 @@ class Make
                 $end->appendChild($endNac);
                 
                 if (!empty($this->tomador['endereco'])) {
-                    $end->appendChild($dom->createElement('xLgr', (string)$this->tomador['endereco']));
+                    $end->appendChild($this->createElementSafeForDOM($dom, 'xLgr', (string)$this->tomador['endereco']));
                 }
                 
                 if (!empty($this->tomador['numero'])) {
@@ -666,11 +701,11 @@ class Make
                 }
                 
                 if (!empty($this->tomador['complemento'])) {
-                    $end->appendChild($dom->createElement('xCpl', (string)$this->tomador['complemento']));
+                    $end->appendChild($this->createElementSafeForDOM($dom, 'xCpl', (string)$this->tomador['complemento']));
                 }
                 
                 if (!empty($this->tomador['bairro'])) {
-                    $end->appendChild($dom->createElement('xBairro', (string)$this->tomador['bairro']));
+                    $end->appendChild($this->createElementSafeForDOM($dom, 'xBairro', (string)$this->tomador['bairro']));
                 }
                 
                 $toma->appendChild($end);
@@ -724,7 +759,7 @@ class Make
             // xDescServ
             $xDescServ = (string)($this->servico['discriminacao'] ?? $this->servico['descricao'] ?? '');
             if (!empty($xDescServ)) {
-                $cServ->appendChild($dom->createElement('xDescServ', $xDescServ));
+                $cServ->appendChild($this->createElementSafeForDOM($dom, 'xDescServ', $xDescServ));
             }
             
             // cNBS (opcional)
@@ -817,10 +852,26 @@ class Make
 
         if (empty($this->prestador)) {
             $errors[] = 'Dados do prestador não informados';
+        } else {
+            // Validar campos críticos do prestador
+            if (empty($this->prestador['razaoSocial'])) {
+                $errors[] = 'Razão social do prestador é obrigatória';
+            }
+            if (empty($this->prestador['cnpj'])) {
+                $errors[] = 'CNPJ do prestador é obrigatório';
+            }
         }
 
         if (empty($this->tomador)) {
             $errors[] = 'Dados do tomador não informados';
+        } else {
+            // Validar campos críticos do tomador
+            if (empty(trim($this->tomador['razaoSocial'] ?? ''))) {
+                $errors[] = 'Razão social/nome do tomador é obrigatório e não pode estar vazio';
+            }
+            if (empty($this->tomador['cpfCnpj'])) {
+                $errors[] = 'CPF/CNPJ do tomador é obrigatório';
+            }
         }
 
         if (empty($this->servico)) {
@@ -858,7 +909,8 @@ class Make
         
         // xNome (Razão Social) - obrigatório conforme XML do portal
         if (!empty($this->prestador['razaoSocial'])) {
-            $emit->appendChild($this->dom->createElement('xNome', $this->prestador['razaoSocial']));
+            // Usar createElementSafe para garantir escape correto de caracteres especiais XML
+            $emit->appendChild($this->createElementSafe('xNome', $this->prestador['razaoSocial']));
         }
         
         // enderNac (Endereço Nacional) - conforme XML do portal
@@ -884,7 +936,7 @@ class Make
             
             // xLgr (Logradouro)
             if (!empty($this->prestador['endereco'])) {
-                $enderNac->appendChild($this->dom->createElement('xLgr', $this->prestador['endereco']));
+                $enderNac->appendChild($this->createElementSafe('xLgr', $this->prestador['endereco']));
             }
             
             // nro (Número)
@@ -894,7 +946,7 @@ class Make
             
             // xBairro (Bairro)
             if (!empty($this->prestador['bairro'])) {
-                $enderNac->appendChild($this->dom->createElement('xBairro', $this->prestador['bairro']));
+                $enderNac->appendChild($this->createElementSafe('xBairro', $this->prestador['bairro']));
             }
             
             // cMun (Código do Município - IBGE) - obrigatório
@@ -966,7 +1018,12 @@ class Make
         // CNPJ/CPF direto (sem wrapper CpfCnpj)
         $docTag = strlen($this->tomador['cpfCnpj']) === 11 ? 'CPF' : 'CNPJ';
         $toma->appendChild($this->dom->createElement($docTag, $this->tomador['cpfCnpj']));
-        $toma->appendChild($this->dom->createElement('xNome', $this->tomador['razaoSocial']));
+        
+        // xNome (Razão Social) - já validado em setTomador() via DpsValidator
+        // Se chegou aqui, o razaoSocial já foi validado e não pode estar vazio
+        // Usar createElementSafe para garantir escape correto de caracteres especiais XML (&, <, >, etc.)
+        $razaoSocial = $this->tomador['razaoSocial'] ?? '';
+        $toma->appendChild($this->createElementSafe('xNome', $razaoSocial));
 
         // Estrutura de endereço conforme XML aprovado
         // cMun é obrigatório dentro de endNac conforme XML aprovado
@@ -1011,7 +1068,7 @@ class Make
                 
                 // Campos do endereço (xLgr, nro, xCpl, xBairro) ficam dentro de 'end', mas FORA de 'endNac'
                 if (!empty($this->tomador['endereco'])) {
-                    $end->appendChild($this->dom->createElement('xLgr', $this->tomador['endereco']));
+                    $end->appendChild($this->createElementSafe('xLgr', $this->tomador['endereco']));
                 }
                 
                 if (!empty($this->tomador['numero'])) {
@@ -1019,11 +1076,11 @@ class Make
                 }
                 
                 if (!empty($this->tomador['complemento'])) {
-                    $end->appendChild($this->dom->createElement('xCpl', $this->tomador['complemento']));
+                    $end->appendChild($this->createElementSafe('xCpl', $this->tomador['complemento']));
                 }
                 
                 if (!empty($this->tomador['bairro'])) {
-                    $end->appendChild($this->dom->createElement('xBairro', $this->tomador['bairro']));
+                    $end->appendChild($this->createElementSafe('xBairro', $this->tomador['bairro']));
                 }
                 
                 $toma->appendChild($end);
@@ -1088,7 +1145,7 @@ class Make
         
         // xDescServ (Descrição do Serviço)
         $xDescServ = $this->servico['discriminacao'] ?? $this->servico['descricao'] ?? '';
-        $cServ->appendChild($this->dom->createElement('xDescServ', $xDescServ));
+        $cServ->appendChild($this->createElementSafe('xDescServ', $xDescServ));
         
         // cNBS (Código NBS) - opcional
         if (!empty($this->servico['cNBS'])) {
