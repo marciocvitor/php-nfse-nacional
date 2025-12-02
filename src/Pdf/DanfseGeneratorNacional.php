@@ -296,7 +296,7 @@ class DanfseGeneratorNacional
         $html .= '<tr><td class="label">E-mail:</td><td>' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '</td></tr>';
         $html .= '<tr><td class="label">Endereço:</td><td>' . htmlspecialchars($endereco, ENT_QUOTES, 'UTF-8') . '</td></tr>';
         $html .= '<tr><td class="label">Município:</td><td>' . htmlspecialchars($municipio, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        $html .= '<tr><td class="label">Regime Tributário:</td><td>' . htmlspecialchars($regime, ENT_QUOTES, 'UTF-8') . '</td></tr>';
+        // Removido campo "Regime Tributário" conforme solicitado
         $html .= '</table>';
         
         return $html;
