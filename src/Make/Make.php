@@ -789,32 +789,46 @@ class Make
             // tribMun
             $tribMun = $dom->createElement('tribMun');
             $tribISSQN = (int)($this->servico['tribISSQN'] ?? 1);
-            $tpRetISSQN = (int)($this->servico['tpRetISSQN'] ?? ($this->servico['issRetido'] == 1 ? 1 : 2));
+            $tpRetISSQN = (int)($this->servico['tpRetISSQN'] ?? ($this->servico['issRetido'] == 1 ? 2 : 1));
             $tribMun->appendChild($dom->createElement('tribISSQN', (string)$tribISSQN));
             $tribMun->appendChild($dom->createElement('tpRetISSQN', (string)$tpRetISSQN));
             $trib->appendChild($tribMun);
             
-            // tribFed (PIS/COFINS)
-            $tribFed = $dom->createElement('tribFed');
-            $piscofins = $dom->createElement('piscofins');
+            // tribFed (PIS/COFINS) - OPCIONAL para Simples Nacional com regApTribSN = 1
+            // Só incluir se houver alíquotas configuradas OU se informado explicitamente
+            $incluir_pis_cofins = false;
             
-            $vBCPisCofins = (float)($this->servico['vBCPisCofins'] ?? $valorServicos);
-            $pAliqPis = (float)($this->servico['pAliqPis'] ?? 0.31);
-            $pAliqCofins = (float)($this->servico['pAliqCofins'] ?? 1.43);
-            $vPis = $vBCPisCofins * ($pAliqPis / 100);
-            $vCofins = $vBCPisCofins * ($pAliqCofins / 100);
-            $tpRetPisCofins = (int)($this->servico['tpRetPisCofins'] ?? 1);
+            if (isset($this->servico['pAliqPis']) && $this->servico['pAliqPis'] > 0) {
+                $incluir_pis_cofins = true;
+            } elseif (isset($this->servico['pAliqCofins']) && $this->servico['pAliqCofins'] > 0) {
+                $incluir_pis_cofins = true;
+            } elseif (isset($this->servico['incluir_pis_cofins']) && $this->servico['incluir_pis_cofins'] === true) {
+                $incluir_pis_cofins = true;
+            }
             
-            $piscofins->appendChild($dom->createElement('CST', '01'));
-            $piscofins->appendChild($dom->createElement('vBCPisCofins', number_format($vBCPisCofins, 2, '.', '')));
-            $piscofins->appendChild($dom->createElement('pAliqPis', number_format($pAliqPis, 2, '.', '')));
-            $piscofins->appendChild($dom->createElement('pAliqCofins', number_format($pAliqCofins, 2, '.', '')));
-            $piscofins->appendChild($dom->createElement('vPis', number_format($vPis, 2, '.', '')));
-            $piscofins->appendChild($dom->createElement('vCofins', number_format($vCofins, 2, '.', '')));
-            $piscofins->appendChild($dom->createElement('tpRetPisCofins', (string)$tpRetPisCofins));
-            
-            $tribFed->appendChild($piscofins);
-            $trib->appendChild($tribFed);
+            if ($incluir_pis_cofins) {
+                $tribFed = $dom->createElement('tribFed');
+                $piscofins = $dom->createElement('piscofins');
+                
+                $vBCPisCofins = (float)($this->servico['vBCPisCofins'] ?? $valorServicos);
+                $pAliqPis = (float)($this->servico['pAliqPis'] ?? 0);
+                $pAliqCofins = (float)($this->servico['pAliqCofins'] ?? 0);
+                $vPis = $vBCPisCofins * ($pAliqPis / 100);
+                $vCofins = $vBCPisCofins * ($pAliqCofins / 100);
+                $tpRetPisCofins = (int)($this->servico['tpRetPisCofins'] ?? 1);
+                
+                $cst = $this->servico['CST'] ?? '01';
+                $piscofins->appendChild($dom->createElement('CST', $cst));
+                $piscofins->appendChild($dom->createElement('vBCPisCofins', number_format($vBCPisCofins, 2, '.', '')));
+                $piscofins->appendChild($dom->createElement('pAliqPis', number_format($pAliqPis, 2, '.', '')));
+                $piscofins->appendChild($dom->createElement('pAliqCofins', number_format($pAliqCofins, 2, '.', '')));
+                $piscofins->appendChild($dom->createElement('vPis', number_format($vPis, 2, '.', '')));
+                $piscofins->appendChild($dom->createElement('vCofins', number_format($vCofins, 2, '.', '')));
+                $piscofins->appendChild($dom->createElement('tpRetPisCofins', (string)$tpRetPisCofins));
+                
+                $tribFed->appendChild($piscofins);
+                $trib->appendChild($tribFed);
+            }
             
             // totTrib (pTotTribSN)
             $totTrib = $dom->createElement('totTrib');
@@ -1174,35 +1188,48 @@ class Make
         
         // tribMun (Tributos Municipais)
         $tribMun = $this->dom->createElement('tribMun');
-        $tribISSQN = $this->dom->createElement('tribISSQN', '1'); // 1=Sim
-        $tpRetISSQN = $this->dom->createElement('tpRetISSQN', (string) ($this->servico['issRetido'] ?? 2)); // 1=Sim, 2=Não
+        $tribISSQN = $this->dom->createElement('tribISSQN', (string)($this->servico['tribISSQN'] ?? 1)); // 1=Tributável
+        // CORRIGIDO: Usar tpRetISSQN se fornecido, senão converter issRetido corretamente
+        $tpRetISSQN_value = isset($this->servico['tpRetISSQN']) ? (int)$this->servico['tpRetISSQN'] : (($this->servico['issRetido'] ?? 0) == 1 ? 2 : 1);
+        $tpRetISSQN = $this->dom->createElement('tpRetISSQN', (string)$tpRetISSQN_value); // 1=Não retido, 2=Retido
         $tribMun->appendChild($tribISSQN);
         $tribMun->appendChild($tpRetISSQN);
         $trib->appendChild($tribMun);
         
-        // tribFed (Tributos Federais - PIS/COFINS) - opcional mas presente no XML aprovado
-        // Se tiver dados de PIS/COFINS, adicionar; senão, adicionar estrutura básica
-        $tribFed = $this->dom->createElement('tribFed');
-        $piscofins = $this->dom->createElement('piscofins');
+        // tribFed (PIS/COFINS) - OPCIONAL para Simples Nacional
+        // Só incluir se houver alíquotas configuradas
+        $incluir_pis_cofins = false;
         
-        // Valores padrão se não informados
-        $vBCPisCofins = (string) ($this->servico['valorServicos'] ?? '0.00');
-        $cst = '01'; // CST padrão
-        $pAliqPis = '0.31'; // Alíquota PIS padrão
-        $pAliqCofins = '1.43'; // Alíquota COFINS padrão
-        $vPis = number_format((float)$vBCPisCofins * ((float)$pAliqPis / 100), 2, '.', '');
-        $vCofins = number_format((float)$vBCPisCofins * ((float)$pAliqCofins / 100), 2, '.', '');
-        $tpRetPisCofins = '1'; // 1=Sim
+        if (isset($this->servico['pAliqPis']) && (float)$this->servico['pAliqPis'] > 0) {
+            $incluir_pis_cofins = true;
+        } elseif (isset($this->servico['pAliqCofins']) && (float)$this->servico['pAliqCofins'] > 0) {
+            $incluir_pis_cofins = true;
+        } elseif (isset($this->servico['incluir_pis_cofins']) && $this->servico['incluir_pis_cofins'] === true) {
+            $incluir_pis_cofins = true;
+        }
         
-        $piscofins->appendChild($this->dom->createElement('CST', $cst));
-        $piscofins->appendChild($this->dom->createElement('vBCPisCofins', $vBCPisCofins));
-        $piscofins->appendChild($this->dom->createElement('pAliqPis', $pAliqPis));
-        $piscofins->appendChild($this->dom->createElement('pAliqCofins', $pAliqCofins));
-        $piscofins->appendChild($this->dom->createElement('vPis', $vPis));
-        $piscofins->appendChild($this->dom->createElement('vCofins', $vCofins));
-        $piscofins->appendChild($this->dom->createElement('tpRetPisCofins', $tpRetPisCofins));
-        $tribFed->appendChild($piscofins);
-        $trib->appendChild($tribFed);
+        if ($incluir_pis_cofins) {
+            $tribFed = $this->dom->createElement('tribFed');
+            $piscofins = $this->dom->createElement('piscofins');
+            
+            $vBCPisCofins = (string) ($this->servico['valorServicos'] ?? '0.00');
+            $cst = $this->servico['CST'] ?? '01';
+            $pAliqPis = (string)($this->servico['pAliqPis'] ?? '0.00');
+            $pAliqCofins = (string)($this->servico['pAliqCofins'] ?? '0.00');
+            $vPis = number_format((float)$vBCPisCofins * ((float)$pAliqPis / 100), 2, '.', '');
+            $vCofins = number_format((float)$vBCPisCofins * ((float)$pAliqCofins / 100), 2, '.', '');
+            $tpRetPisCofins = (string)($this->servico['tpRetPisCofins'] ?? '1');
+            
+            $piscofins->appendChild($this->dom->createElement('CST', $cst));
+            $piscofins->appendChild($this->dom->createElement('vBCPisCofins', $vBCPisCofins));
+            $piscofins->appendChild($this->dom->createElement('pAliqPis', $pAliqPis));
+            $piscofins->appendChild($this->dom->createElement('pAliqCofins', $pAliqCofins));
+            $piscofins->appendChild($this->dom->createElement('vPis', $vPis));
+            $piscofins->appendChild($this->dom->createElement('vCofins', $vCofins));
+            $piscofins->appendChild($this->dom->createElement('tpRetPisCofins', $tpRetPisCofins));
+            $tribFed->appendChild($piscofins);
+            $trib->appendChild($tribFed);
+        }
         
         // totTrib (Total de Tributos) - opcional mas presente no XML aprovado
         $totTrib = $this->dom->createElement('totTrib');
