@@ -428,8 +428,17 @@ class DanfseGeneratorNacional
      */
     private function renderizarTotais(array $dados): string
     {
-        $vServ = $this->formatarMoeda($dados['valorServico'] ?? $dados['vServ'] ?? 0);
-        $vLiq = $this->formatarMoeda($dados['valorTotal'] ?? $dados['vLiq'] ?? 0);
+        // Garantir que valorServico não fique zerado - usar valorTotal como fallback
+        $vServ = $dados['valorServico'] ?? $dados['vServ'] ?? 0;
+        $vLiq = $dados['valorTotal'] ?? $dados['vLiq'] ?? 0;
+        
+        // Se valorServico estiver zerado mas valorTotal não, usar valorTotal
+        if ($vServ == 0 && $vLiq > 0) {
+            $vServ = $vLiq;
+        }
+        
+        $vServ = $this->formatarMoeda($vServ);
+        $vLiq = $this->formatarMoeda($vLiq);
 
         $html = '<div class="section-title">VALOR TOTAL DA NFS-E</div>';
         $html .= '<table>';
@@ -649,10 +658,27 @@ class DanfseGeneratorNacional
                 $dados['vServ'] = (float)$this->getNodeValue($xpath, $valores, './/sped:vServ | .//vServ');
                 $dados['valorServico'] = $dados['vServ'];
 
+                // Fallback: Se não encontrou dentro de valores, tentar busca global (útil quando vServ está dentro de vServPrest ou outros nós)
+                if ($dados['valorServico'] <= 0) {
+                    $vServGlobal = $xpath->query('//sped:vServ | //vServ');
+                    if ($vServGlobal->length > 0) {
+                        $dados['vServ'] = (float)trim($vServGlobal->item(0)->nodeValue);
+                        $dados['valorServico'] = $dados['vServ'];
+                    }
+                }
+
                 $vLiqNodes = $xpath->query('.//sped:vLiq | .//vLiq', $valores);
                 if ($vLiqNodes->length > 0) {
                     $dados['vLiq'] = (float)trim($vLiqNodes->item(0)->nodeValue);
                     $dados['valorTotal'] = $dados['vLiq'];
+                }
+                
+                // Fallback para Valor Líquido/Total: se não encontrou vLiq, usar vServ
+                if (!isset($dados['valorTotal']) || $dados['valorTotal'] <= 0) {
+                    if ($dados['valorServico'] > 0) {
+                        $dados['vLiq'] = $dados['valorServico'];
+                        $dados['valorTotal'] = $dados['valorServico'];
+                    }
                 }
 
                 $vTotalRetNodes = $xpath->query('.//sped:vTotalRet | .//vTotalRet', $valores);

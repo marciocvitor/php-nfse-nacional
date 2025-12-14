@@ -90,14 +90,28 @@ class Config
     /**
      * Obtém o endpoint completo para uma operação
      * 
-     * @param string $endpoint Endpoint da API (ex: /nfse, /lote, /consulta)
+     * @param string $endpoint Endpoint da API (ex: /nfse, /lote, /consulta, /danfse/{chaveAcesso})
      * @return string URL completa
      */
     public function getApiEndpoint(string $endpoint): string
     {
-        $baseUrl = $this->getApiBaseUrl();
         $endpoint = ltrim($endpoint, '/');
-        
+
+        // CORREÇÃO: O endpoint /danfse/ usa URL diferente (adn.nfse.gov.br) e não precisa de /sefinnacional/
+        // Endpoint correto: https://adn.nfse.gov.br/danfse/{chaveAcesso}
+        if (str_starts_with($endpoint, 'danfse/')) {
+            if ($this->ambiente == 1) {
+                // Produção
+                return 'https://adn.nfse.gov.br/' . $endpoint;
+            } else {
+                // Homologação (pode não estar disponível, mas usa a mesma estrutura)
+                return 'https://adn.producaorestrita.nfse.gov.br/' . $endpoint;
+            }
+        }
+
+        // Para outros endpoints, usar a lógica original
+        $baseUrl = $this->getApiBaseUrl();
+
         // Endpoints diferentes para homologação e produção:
         // Homologação: https://sefin.producaorestrita.nfse.gov.br/SefinNacional/nfse (sem /API/)
         // Produção: https://sefin.nfse.gov.br/sefinnacional/nfse (sem /API/)

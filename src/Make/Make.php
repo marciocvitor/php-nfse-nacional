@@ -134,6 +134,20 @@ class Make
         $this->tpAmb = $tpAmb;
         return $this;
     }
+    
+    /**
+     * Obtém a versão do schema conforme o ambiente
+     * A partir de 10/12/2025, homologação (ambiente 2) passou a aceitar SOMENTE versão 1.01
+     * Produção (ambiente 1) continua usando versão 1.00
+     * 
+     * @return string Versão do schema ('1.00' ou '1.01')
+     */
+    private function getVersaoSchema(): string
+    {
+        // Homologação (ambiente 2) = versão 1.01 (conforme comunicado ACBr de 10/12/2025)
+        // Produção (ambiente 1) = versão 1.00
+        return $this->tpAmb == 2 ? '1.01' : '1.00';
+    }
 
     /**
      * Define a data/hora de emissão (formato: YYYY-MM-DDTHH:mm:ss-03:00)
@@ -276,11 +290,11 @@ class Make
         $this->assertRequiredData();
 
         // Estrutura SPED conforme XML aprovado
-        // Criar elemento com namespace para garantir ordem correta dos atributos
-        $root = $this->dom->createElementNS('http://www.sped.fazenda.gov.br/nfse', 'NFSe');
-        // Definir versao primeiro (ordem conforme XML aprovado: versao antes de xmlns)
-        $root->setAttribute('versao', '1.00');
-        // O xmlns já está definido pelo createElementNS, mas vamos garantir
+        // Criar elemento sem namespace primeiro para controlar ordem dos atributos
+        $root = $this->dom->createElement('NFSe');
+        // IMPORTANTE: A partir de 10/12/2025, homologação usa versão 1.01, produção usa 1.00
+        // No XML que funcionou, o NFSe tem versao ANTES de xmlns: <NFSe versao="1.00" xmlns="...">
+        $root->setAttribute('versao', $this->getVersaoSchema());
         $root->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns', 'http://www.sped.fazenda.gov.br/nfse');
         $this->dom->appendChild($root);
         
@@ -430,9 +444,10 @@ class Make
         // Adicionar namespace explicitamente no DPS conforme XML aprovado no portal
         // Criar elemento normalmente e depois adicionar xmlns usando setAttributeNS
         $dps = $this->dom->createElement('DPS');
-        $dps->setAttribute('versao', '1.00');
-        // Forçar renderização do xmlns no elemento DPS usando setAttributeNS
+        // IMPORTANTE: A partir de 10/12/2025, homologação usa versão 1.01, produção usa 1.00
+        // No XML que funcionou, o DPS tem xmlns ANTES de versao: <DPS xmlns="..." versao="1.00">
         $dps->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns', 'http://www.sped.fazenda.gov.br/nfse');
+        $dps->setAttribute('versao', $this->getVersaoSchema());
         $infNFSe->appendChild($dps);
         
         // infDPS
@@ -489,7 +504,7 @@ class Make
         }
         
         // Ajustar ordem dos atributos no elemento raiz para corresponder ao XML aprovado
-        // XML aprovado: <NFSe versao="1.00" xmlns="...">
+        // XML aprovado: <NFSe versao="1.00" ou "1.01" xmlns="..."> (versão depende do ambiente)
         // Substituir para garantir ordem: versao antes de xmlns
         $xml = preg_replace(
             '/<NFSe\s+xmlns="([^"]+)"\s+versao="([^"]+)">/',
@@ -498,7 +513,7 @@ class Make
         );
         
         // Adicionar namespace explicitamente no elemento DPS conforme XML aprovado
-        // XML aprovado: <DPS versao="1.00" xmlns="http://www.sped.fazenda.gov.br/nfse">
+        // XML aprovado: <DPS versao="1.00" ou "1.01" xmlns="http://www.sped.fazenda.gov.br/nfse"> (versão depende do ambiente)
         $xml = preg_replace(
             '/<DPS\s+versao="([^"]+)">/',
             '<DPS versao="$1"' . "\n            xmlns=\"http://www.sped.fazenda.gov.br/nfse\">",
@@ -542,9 +557,12 @@ class Make
         $dom->formatOutput = true;
         
         // DPS como elemento raiz (sem NFSe/infNFSe)
-        $dps = $dom->createElementNS('http://www.sped.fazenda.gov.br/nfse', 'DPS');
-        $dps->setAttribute('versao', '1.00');
+        // IMPORTANTE: Criar elemento sem namespace primeiro para controlar ordem dos atributos
+        $dps = $dom->createElement('DPS');
+        // IMPORTANTE: A partir de 10/12/2025, homologação usa versão 1.01, produção usa 1.00
+        // No XML que funcionou, o DPS tem xmlns ANTES de versao: <DPS xmlns="..." versao="1.00">
         $dps->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns', 'http://www.sped.fazenda.gov.br/nfse');
+        $dps->setAttribute('versao', $this->getVersaoSchema());
         $dom->appendChild($dps);
         
         // infDPS

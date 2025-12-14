@@ -75,7 +75,7 @@ class Tools
             ],
         ]);
     }
-    
+
     /**
      * Envia uma DPS individual (SÍNCRONO)
      */
@@ -84,30 +84,33 @@ class Tools
         try {
             $this->validateXml($xml, SchemaType::DPS);
             $signedXml = $this->signer->sign($xml);
+            
             // A API do Portal Nacional espera JSON com XML compactado em GZIP e codificado em Base64
             $restResult = $this->callRest('POST', '/nfse', $signedXml, true);
             $xmlResult = $restResult['xml'];
             $chaveAcesso = $restResult['chaveAcesso'] ?? null;
             $response = $this->buildResponse($xmlResult, 'RecepcionarDps', $chaveAcesso);
-            
+
             // Extrai número da DPS do XML para log
             $numeroDps = $this->extractDpsNumber($xml);
-            
+
             $this->logger->logEnvioDps(
                 $numeroDps,
                 $response->sucesso,
                 $response->numero,
                 $response->sucesso ? null : $response->mensagem
             );
-            
+
             return $response;
         } catch (Throwable $e) {
             $numeroDps = $this->extractDpsNumber($xml);
             $this->logger->logEnvioDps($numeroDps, false, null, $e->getMessage());
+            
             throw $e;
         }
     }
     
+
     /**
      * Envia lote de DPS (ASSÍNCRONO)
      */
@@ -117,17 +120,17 @@ class Tools
             if (empty($listaDps)) {
                 throw new ValidationException('Lista de DPS vazia');
             }
-            
+
             if (count($listaDps) > 50) {
                 throw new ValidationException('Limite máximo de 50 DPS por lote excedido');
             }
-            
+
             $assinadas = [];
             foreach ($listaDps as $dpsXml) {
                 $this->validateXml($dpsXml, SchemaType::DPS);
                 $assinadas[] = $this->signer->sign($dpsXml);
             }
-            
+
             $xmlLote = $this->gerarXmlLote($assinadas, $numeroLote);
             $this->validateXml($xmlLote, SchemaType::LOTE);
             $signedLote = $this->signer->sign($xmlLote, 'LoteRps');
@@ -135,9 +138,9 @@ class Tools
             $xmlResult = $restResult['xml'];
             $chaveAcesso = $restResult['chaveAcesso'] ?? null;
             $response = $this->buildResponse($xmlResult, 'RecepcionarLoteRps', $chaveAcesso);
-            
+
             $protocolo = $response->dados['parsed']['Protocolo'] ?? null;
-            
+
             $this->logger->logEnvioLote(
                 $numeroLote,
                 count($listaDps),
@@ -145,14 +148,14 @@ class Tools
                 $protocolo ? (string) $protocolo : null,
                 $response->sucesso ? null : $response->mensagem
             );
-            
+
             return $response;
         } catch (Throwable $e) {
             $this->logger->logEnvioLote($numeroLote, count($listaDps), false, null, $e->getMessage());
             throw $e;
         }
     }
-    
+
     /**
      * Consulta resultado de um lote pelo protocolo (ASSÍNCRONO)
      */
@@ -164,23 +167,23 @@ class Tools
             $xmlResult = $restResult['xml'];
             $chaveAcesso = $restResult['chaveAcesso'] ?? null;
             $response = $this->buildResponse($xmlResult, 'ConsultarLoteRps', $chaveAcesso);
-            
+
             $situacao = $response->dados['parsed']['Situacao'] ?? null;
-            
+
             $this->logger->logConsultaLote(
                 $protocolo,
                 $response->sucesso,
                 $situacao ? (string) $situacao : null,
                 $response->sucesso ? null : $response->mensagem
             );
-            
+
             return $response;
         } catch (Throwable $e) {
             $this->logger->logConsultaLote($protocolo, false, null, $e->getMessage());
             throw $e;
         }
     }
-    
+
     /**
      * Consulta NFSe individual por número (SÍNCRONO)
      */
@@ -192,12 +195,12 @@ class Tools
             $xmlResult = $restResult['xml'];
             $chaveAcesso = $restResult['chaveAcesso'] ?? null;
             $response = $this->buildResponse($xmlResult, 'ConsultarNfse', $chaveAcesso);
-            
+
             $this->logger->log('ConsultarNfse', "Consulta realizada para NFSe: {$numero}", [
                 'numero' => $numero,
                 'sucesso' => $response->sucesso
             ]);
-            
+
             return $response;
         } catch (Throwable $e) {
             $this->logger->log('ConsultarNfse', "Falha ao consultar NFSe: {$numero}", [
@@ -207,7 +210,7 @@ class Tools
             throw $e;
         }
     }
-    
+
     /**
      * Cancela NFSe individual via API de Eventos
      * 
@@ -240,13 +243,13 @@ class Tools
             $restResult = $this->callRestEvento('POST', '/nfse/' . $chaveAcesso . '/eventos', $xmlEventoAssinado);
             $xmlResult = $restResult['xml'];
             $response = $this->buildResponse($xmlResult, 'CancelarNfse', $chaveAcesso);
-            
+
             $this->logger->logCancelamento(
                 $chaveAcesso,
                 $response->sucesso,
                 $response->sucesso ? null : $response->mensagem
             );
-            
+
             return $response;
         } catch (Throwable $e) {
             $this->logger->logCancelamento($chaveAcesso, false, $e->getMessage());
@@ -533,7 +536,7 @@ class Tools
         $generator = new DanfseGenerator();
         return $generator->gerarBase64($response, $dadosAdicionais);
     }
-    
+
     private function validateXml(string $xml, SchemaType $schemaType): void
     {
         if (!$this->config->validarSchemas) {
@@ -565,7 +568,7 @@ class Tools
         } catch (Throwable) {
             // Ignora erros de parsing
         }
-        
+
         return 'N/A';
     }
 
@@ -665,7 +668,7 @@ class Tools
 
             // Verifica se a resposta é um XML válido
             if (empty($body) || !str_contains($body, '<')) {
-            throw new CommunicationException(
+                throw new CommunicationException(
                     "Resposta da API não contém XML válido. Status: {$statusCode}. Resposta: " . substr($body, 0, 500)
                 );
             }
@@ -932,13 +935,13 @@ class Tools
     private function extrairErroSchema(string $mensagemErro): string
     {
         $mensagem = "Erro de validação do XML conforme schema do Portal Nacional.\n\n";
-        
+
         // Extrair nome do elemento que está com problema
         if (preg_match("/The '([^']+)' element is invalid/i", $mensagemErro, $matches)) {
             $elemento = $matches[1];
             // Remover namespace para facilitar leitura
             $elemento = preg_replace('/^.*:/', '', $elemento);
-            
+
             // Mapear elementos conhecidos para mensagens mais claras
             $mapeamentoElementos = [
                 'xNome' => 'Nome/Razão Social do Tomador',
@@ -952,15 +955,15 @@ class Tools
                 'fone' => 'Telefone',
                 'email' => 'E-mail',
             ];
-            
+
             $nomeAmigavel = $mapeamentoElementos[$elemento] ?? $elemento;
-            
+
             // Verificar se é erro de valor vazio
             if (preg_match("/The value '' is invalid|actual length is less than the MinLength/i", $mensagemErro)) {
                 $mensagem .= "PROBLEMA IDENTIFICADO:\n";
                 $mensagem .= "O campo '{$nomeAmigavel}' está vazio ou não foi preenchido.\n\n";
                 $mensagem .= "SOLUÇÃO:\n";
-                
+
                 if ($elemento === 'xNome') {
                     $mensagem .= "1. Verifique o cadastro do cliente (tomador) no sistema\n";
                     $mensagem .= "2. Certifique-se de que o campo 'Razão Social' ou 'Nome' está preenchido\n";
@@ -991,7 +994,7 @@ class Tools
             $mensagem .= "1. Verifique todos os campos obrigatórios do cadastro do cliente\n";
             $mensagem .= "2. Certifique-se de que todos os dados estão preenchidos corretamente\n";
         }
-        
+
         return $mensagem;
     }
 
@@ -1037,7 +1040,7 @@ class Tools
             xml: $xml
         );
     }
-    
+
     /**
      * Gera XML do lote de DPS
      */
@@ -1045,13 +1048,15 @@ class Tools
     {
         $xml = '<?xml version="1.0" encoding="UTF-8"?>';
         $xml .= '<EnviarLoteRpsEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">';
-        $xml .= '<LoteRps Id="' . $numeroLote . '" versao="1.00">';
+        // IMPORTANTE: A partir de 10/12/2025, homologação (ambiente 2) usa versão 1.01, produção (ambiente 1) usa 1.00
+        $versao = $this->config->ambiente == 2 ? '1.01' : '1.00';
+        $xml .= '<LoteRps Id="' . $numeroLote . '" versao="' . $versao . '">';
         $xml .= '<NumeroLote>' . $numeroLote . '</NumeroLote>';
         $xml .= '<CpfCnpj><Cnpj>' . $this->config->cnpj . '</Cnpj></CpfCnpj>';
         $xml .= '<InscricaoMunicipal>' . $this->config->im . '</InscricaoMunicipal>';
         $xml .= '<QuantidadeRps>' . count($listaDps) . '</QuantidadeRps>';
         $xml .= '<ListaRps>';
-        
+
         foreach ($listaDps as $dps) {
             $xml .= '<Rps>';
             $xml .= str_replace(
@@ -1061,11 +1066,11 @@ class Tools
             );
             $xml .= '</Rps>';
         }
-        
+
         $xml .= '</ListaRps>';
         $xml .= '</LoteRps>';
         $xml .= '</EnviarLoteRpsEnvio>';
-        
+
         return $xml;
     }
 
@@ -1128,14 +1133,26 @@ class Tools
         // O autor é quem está assinando o evento, ou seja, o prestador da NFS-e
         $cnpjAutor = preg_replace('/[^0-9]/', '', $this->config->cnpj ?? '');
 
+        // Validar tamanho da chave de acesso (50 dígitos numéricos)
+        if (strlen($chaveAcesso) !== 50 || !ctype_digit($chaveAcesso)) {
+            throw new ValidationException('A chave de acesso deve conter exatamente 50 dígitos numéricos para eventos da NFS-e Nacional.');
+        }
+
         // Limpar motivo: remover quebras de linha, espaços extras e dois pontos fixos
         $motivoLimpo = trim($motivo);
         $motivoLimpo = preg_replace('/\s+/', ' ', $motivoLimpo); // Múltiplos espaços viram um
         $motivoLimpo = rtrim($motivoLimpo, ':'); // Remove dois pontos no final se houver
 
+        // Validar tamanho mínimo do motivo (15 caracteres conforme schema)
+        if (mb_strlen($motivoLimpo, 'UTF-8') < 15) {
+            throw new ValidationException('A justificativa de cancelamento deve ter no mínimo 15 caracteres.');
+        }
+
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         // Elemento raiz correto: pedRegEvento
-        $xml .= '<pedRegEvento xmlns="http://www.sped.fazenda.gov.br/nfse" versao="1.00">' . "\n";
+        // IMPORTANTE: A partir de 10/12/2025, homologação (ambiente 2) usa versão 1.01, produção (ambiente 1) usa 1.00
+        $versao = $this->config->ambiente == 2 ? '1.01' : '1.00';
+        $xml .= '<pedRegEvento xmlns="http://www.sped.fazenda.gov.br/nfse" versao="' . $versao . '">' . "\n";
         // Elemento filho correto: infPedReg (não infEvento)
         // Usar 'Id' maiúsculo conforme esperado pelo schema e pelo XmlSigner
         $xml .= '  <infPedReg Id="' . htmlspecialchars($idEvento, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '">' . "\n";
