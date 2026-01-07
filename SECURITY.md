@@ -77,7 +77,7 @@ $config = Config::fromArray([
 
 // ❌ Errado: Não armazene no webroot
 $config = Config::fromArray([
-    'certPfx' => '/var/www/html/public/certificado.pfx', // NUNCA faça isso!
+    'certPfx' => '/caminho/para/webroot/public/certificado.pfx', // NUNCA faça isso!
     'certPassword' => 'senha123', // NUNCA hardcode senhas
 ]);
 ```
@@ -86,10 +86,10 @@ $config = Config::fromArray([
 
 ```php
 // ✅ Correto: Armazene logs fora do webroot
-$tools = new Tools($config, logDir: '/var/log/nfse');
+$tools = new Tools($config, logDir: '/caminho/seguro/logs/nfse');
 
 // ❌ Errado: Não exponha logs
-$tools = new Tools($config, logDir: '/var/www/html/logs'); // NUNCA faça isso!
+$tools = new Tools($config, logDir: '/caminho/para/webroot/logs'); // NUNCA faça isso!
 ```
 
 ## Dependências

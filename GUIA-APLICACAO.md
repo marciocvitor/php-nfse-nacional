@@ -11,7 +11,7 @@ Este guia mostra **3 formas** de usar a biblioteca PHP NFSe Nacional no seu proj
 ```bash
 # No diretório do seu projeto
 mkdir -p libs
-cp -r /c/xampp/htdocs/php-nfse-nacional libs/php-nfse-nacional
+cp -r /caminho/para/php-nfse-nacional libs/php-nfse-nacional
 ```
 
 ### Passo 2: Configurar autoload no seu projeto
@@ -56,7 +56,7 @@ use NFSeNacional\Make\Make;
 
 ```bash
 # No diretório da biblioteca
-cd /c/xampp/htdocs/php-nfse-nacional
+cd /caminho/para/php-nfse-nacional
 
 # Inicializar git (se ainda não tiver)
 git init

@@ -9,8 +9,8 @@
 #    Nome: php-nfse-nacional
 #    Tipo: PRIVADO
 
-# 2. Execute no terminal:
-cd /c/xampp/htdocs/php-nfse-nacional
+# 2. Execute no terminal (no diretório da biblioteca):
+cd /caminho/para/php-nfse-nacional
 git branch -M main
 git remote add origin https://github.com/SEU-USUARIO/php-nfse-nacional.git
 git push -u origin main
