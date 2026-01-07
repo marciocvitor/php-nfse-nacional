@@ -2,14 +2,35 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net)
+[![Latest Stable Version](https://poser.pugx.org/php-nfse/nfse-nacional/v/stable)](https://packagist.org/packages/php-nfse/nfse-nacional)
+[![Total Downloads](https://poser.pugx.org/php-nfse/nfse-nacional/downloads)](https://packagist.org/packages/php-nfse/nfse-nacional)
+[![GitHub Issues](https://img.shields.io/github/issues/marciocvitor/php-nfse-nacional)](https://github.com/marciocvitor/php-nfse-nacional/issues)
+[![GitHub Stars](https://img.shields.io/github/stars/marciocvitor/php-nfse-nacional)](https://github.com/marciocvitor/php-nfse-nacional/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/marciocvitor/php-nfse-nacional)](https://github.com/marciocvitor/php-nfse-nacional/network)
 
-Biblioteca PHP open source para emissão de **Nota Fiscal de Serviço Eletrônica (NFSe)** no **Portal Nacional** seguindo o padrão **ABRASF**, com validação de schemas e assinatura XML no mesmo nível praticado pela **nfephp-org**.
+Biblioteca PHP open source para emissão de **Nota Fiscal de Serviço Eletrônica (NFSe)** no **Portal Nacional** seguindo o padrão **ABRASF**, com validação de schemas e assinatura XML no mesmo nível praticado pela **[nfephp-org](https://github.com/nfephp-org)**.
+
+---
+
+## 🚀 Atualizações Recentes
+
+* Layout 1.00 - Portal Nacional NFSe
+* API REST (migração completa de SOAP para REST)
+* Suporte a envio em lote (até 50 DPS)
+* Geração de DANFSe em PDF
+* Sistema de log com versão e NT
 
 ---
 
 ## Instalação
 
-### Via Composer (Repositório Privado)
+### Via Composer (Repositório Público)
+
+```bash
+composer require php-nfse/nfse-nacional
+```
+
+### Via Composer (Repositório Git)
 
 Adicione o repositório no seu `composer.json`:
 
@@ -120,6 +141,9 @@ echo "NFS-e geradas: " . count($resultado->dados['parsed']['ListaNfse'] ?? []) .
 ```
 
 **Documentação completa:** [MANUAL-LOTE.md](MANUAL-LOTE.md)
+
+---
+
 ## Requisitos
 
 - PHP >= 8.2
@@ -174,6 +198,9 @@ php-nfse-nacional/
 ├── README.md              # Documentação
 ├── QUICK-START.md         # Guia rápido
 ├── INSTALL.md             # Guia completo instalação
+├── CONTRIBUTING.md        # Guia de contribuição
+├── CODE_OF_CONDUCT.md     # Código de conduta
+├── SECURITY.md            # Política de segurança
 ├── LICENSE                # Licença MIT
 ├── src/
 │   ├── Config/           # Gerenciamento de configuração
@@ -313,35 +340,118 @@ O PDF gerado contém:
 
 ---
 
-## Contribuindo
+## 💰 Apoie o Projeto
 
-Contribuições são bem-vindas! Por favor:
+Este projeto é mantido com ❤️ pela comunidade. Você pode apoiar de várias formas:
 
-1. Faça um Fork do projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/nova-funcionalidade`)
-3. Commit suas mudanças (`git commit -am 'Adiciona nova funcionalidade'`)
-4. Push para a branch (`git push origin feature/nova-funcionalidade`)
+### 🎁 Doações
+
+<!-- Descomente quando configurar GitHub Sponsors
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-❤-ea4aaa?style=for-the-badge&logo=github)](https://github.com/sponsors/marciocvitor)
+-->
+
+Se este projeto te ajudou, considere fazer uma doação para manter o desenvolvimento ativo.
+
+### 💼 Serviços Comerciais
+
+Precisa de ajuda profissional? Oferecemos:
+
+- ✅ **Consultoria de Integração** - Implementação customizada e suporte técnico
+- ✅ **Suporte Prioritário** - SLA garantido e resposta rápida
+- ✅ **Treinamentos** - Cursos presenciais e online
+- ✅ **Desenvolvimento Customizado** - Funcionalidades sob medida
+
+📧 **Contato**: Entre em contato através das [Issues](https://github.com/marciocvitor/php-nfse-nacional/issues)
+
+---
+
+## 🤝 Contribuindo
+
+Contribuições são muito bem-vindas! 
+
+### Primeiros Passos
+
+1. Fork o projeto
+2. Crie sua feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
 5. Abra um Pull Request
 
+📖 **Leia mais**: [CONTRIBUTING.md](CONTRIBUTING.md)
+
+### Para tirar suas dúvidas
+
+- Consulte a documentação em `docs/`
+- Veja os exemplos em `examples/`
+- Abra uma Issue com a label `question`
+
+> **Nota**: Issues são para bugs e sugestões de funcionalidades. Para dúvidas gerais, use o template de Dúvida.
+
 ---
 
-## Licença
+## 🧪 Testing
 
-Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+Todos os testes são desenvolvidos para operar com o PHPUnit.
+
+```bash
+# Executar testes
+composer test
+
+# Verificar estilo de código
+composer phpcs
+
+# Análise estática
+composer phpstan
+```
 
 ---
 
-## Suporte
+## 📋 Change log
+
+Acompanhe o [CHANGELOG.md](CHANGELOG.md) para maiores informações sobre as alterações recentes.
+
+---
+
+## 🔒 Security
+
+Caso você encontre algum problema relativo a segurança, por favor envie um email diretamente aos mantenedores do pacote ao invés de abrir um ISSUE.
+
+📖 **Leia mais**: [SECURITY.md](SECURITY.md)
+
+---
+
+## 📜 Código de Conduta
+
+Este projeto adere a um Código de Conduta. Ao participar, você concorda em manter este código.
+
+📖 **Leia mais**: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+
+---
+
+## 🙏 Acknowledgments
+
+* A todos os colegas que colaboram de alguma forma com o desenvolvimento contínuo desta biblioteca
+* Inspirado nos padrões de qualidade do [nfephp-org](https://github.com/nfephp-org)
+
+---
+
+## 📄 Licença
+
+Este projeto está disponibilizado sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+
+---
+
+## 📞 Suporte
 
 - **Issues:** [GitHub Issues](https://github.com/marciocvitor/php-nfse-nacional/issues)
 - **Documentação:** [Wiki](https://github.com/marciocvitor/php-nfse-nacional)
 
 ---
 
-## Aviso Legal
+## ⚠️ Aviso Legal
 
 Esta biblioteca é um projeto open source independente e não possui vínculo oficial com o Governo Federal, ABRASF ou qualquer órgão público. Use por sua conta e risco.
 
 ---
 
-**Desenvolvido pela comunidade PHP brasileira**
+**Desenvolvido pela comunidade PHP brasileira** 🇧🇷

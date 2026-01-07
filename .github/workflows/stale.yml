@@ -1,0 +1,41 @@
+name: Auto Close Stale Issues
+
+on:
+  schedule:
+    # Executa toda segunda-feira às 9h (horário UTC)
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          stale-issue-message: |
+            👋 Esta issue está inativa há um tempo.
+            
+            Se ainda é relevante, por favor, comente aqui para manter ativa.
+            
+            Caso contrário, será fechada automaticamente em 7 dias.
+          close-issue-message: |
+            Esta issue foi fechada por inatividade.
+            
+            Se ainda é relevante, sinta-se à vontade para reabrir ou criar uma nova issue.
+          stale-pr-message: |
+            👋 Este Pull Request está inativo há um tempo.
+            
+            Se ainda é relevante, por favor, atualize ou comente para manter ativo.
+          stale-issue-label: 'stale'
+          stale-pr-label: 'stale'
+          days-before-issue-stale: 30
+          days-before-issue-close: 7
+          days-before-pr-stale: 60
+          days-before-pr-close: 14
+          exempt-issue-labels: 'bug,enhancement,priority-high,pinned'
+          exempt-pr-labels: 'priority-high,work-in-progress'
+

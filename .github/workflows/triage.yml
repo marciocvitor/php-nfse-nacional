@@ -1,0 +1,68 @@
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Mensagem de boas-vindas para novas issues
+        if: github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueBody = context.payload.issue.body || '';
+            const issueTitle = context.payload.issue.title || '';
+            
+            // Verifica se a issue está vazia ou sem template
+            if (issueBody.length < 50) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `👋 Olá @${context.payload.issue.user.login}! Obrigado por abrir esta issue.
+            
+            Parece que algumas informações estão faltando. Por favor, edite sua issue e preencha o template completo para que possamos ajudá-lo melhor.
+            
+            **Lembre-se de:**
+            - ⚠️ Remover informações sensíveis (CNPJ, certificados, senhas)
+            - 📝 Fornecer código de exemplo que reproduza o problema
+            - 🔧 Informar versão do PHP e da biblioteca
+            
+            Obrigado! 🙏`
+              });
+              
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['needs-info']
+              });
+            }
+            
+            // Auto-label baseado no título
+            const labels = [];
+            
+            if (issueTitle.toLowerCase().includes('[bug]')) {
+              labels.push('bug');
+            }
+            if (issueTitle.toLowerCase().includes('[feature]')) {
+              labels.push('enhancement');
+            }
+            if (issueTitle.toLowerCase().includes('[question]')) {
+              labels.push('question');
+            }
+            
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labels
+              });
+            }
+
