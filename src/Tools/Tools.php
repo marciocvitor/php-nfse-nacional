@@ -20,7 +20,7 @@ use Throwable;
 
 /**
  * Classe principal para comunicação com a API REST do Portal Nacional de NFSe
- * 
+ *
  * O Portal Nacional usa APIs REST (não SOAP/WSDL)
  * Documentação: https://www.nfse.gov.br/swagger/contribuintesissqn/
  */
@@ -84,7 +84,7 @@ class Tools
         try {
             $this->validateXml($xml, SchemaType::DPS);
             $signedXml = $this->signer->sign($xml);
-            
+
             // A API do Portal Nacional espera JSON com XML compactado em GZIP e codificado em Base64
             $restResult = $this->callRest('POST', '/nfse', $signedXml, true);
             $xmlResult = $restResult['xml'];
@@ -105,11 +105,11 @@ class Tools
         } catch (Throwable $e) {
             $numeroDps = $this->extractDpsNumber($xml);
             $this->logger->logEnvioDps($numeroDps, false, null, $e->getMessage());
-            
+
             throw $e;
         }
     }
-    
+
 
     /**
      * Envia lote de DPS (ASSÍNCRONO)
@@ -213,14 +213,14 @@ class Tools
 
     /**
      * Cancela NFSe individual via API de Eventos
-     * 
+     *
      * NOTA IMPORTANTE: O schema XSD do Portal Nacional de NFS-e espera elementos específicos
      * após <nPedRegEvento> (e101101, e105102, etc.), mas o cancelamento (110111) não está
      * na lista de elementos suportados. Isso pode indicar que:
      * 1. O cancelamento não é suportado por este schema/endpoint
      * 2. O cancelamento usa outro código/estrutura
      * 3. Há outro método/endpoint para cancelamento
-     * 
+     *
      * @param string $chaveAcesso Chave de acesso da NFS-e (44 dígitos)
      * @param string $motivo Motivo do cancelamento
      * @return Response
@@ -259,7 +259,7 @@ class Tools
 
     /**
      * Consulta DPS pelo identificador para obter a chave de acesso da NFS-e gerada
-     * 
+     *
      * @param string $idDps Identificador da DPS (42 dígitos: cLocEmi(7) + tipoInscricao(1) + CNPJ(14) + serie(5) + nDPS(15))
      * @return Response Response contendo a chave de acesso em response->dados['chaveAcesso']
      */
@@ -330,7 +330,7 @@ class Tools
 
     /**
      * Consulta NFS-e pela chave de acesso
-     * 
+     *
      * @param string $chaveAcesso Chave de acesso da NFS-e (44 dígitos)
      * @return Response Response contendo o XML da NFS-e em response->xml
      */
@@ -424,10 +424,10 @@ class Tools
 
     /**
      * Baixa o DANFSe (PDF) diretamente da API do Portal Nacional
-     * 
+     *
      * Endpoint: GET /danfse/{chaveAcesso}
      * Retorna o PDF oficial do DANFSe gerado pelo Portal Nacional
-     * 
+     *
      * @param string $chaveAcesso Chave de acesso da NFS-e (44 dígitos)
      * @return string Conteúdo binário do PDF
      * @throws CommunicationException Se houver erro na comunicação ou se o PDF não for encontrado
@@ -500,7 +500,7 @@ class Tools
 
     /**
      * Gera PDF do DANFSe a partir do Response da NFSe
-     * 
+     *
      * @param Response $response Response da NFSe emitida/consultada
      * @param array $dadosAdicionais Dados adicionais para o PDF (ex: prestador.razaoSocial)
      * @return string Conteúdo do PDF em binário
@@ -513,7 +513,7 @@ class Tools
 
     /**
      * Gera PDF do DANFSe e salva em arquivo
-     * 
+     *
      * @param Response $response Response da NFSe emitida/consultada
      * @param string $caminho Caminho completo do arquivo PDF
      * @param array $dadosAdicionais Dados adicionais para o PDF
@@ -526,7 +526,7 @@ class Tools
 
     /**
      * Gera PDF do DANFSe e retorna como base64
-     * 
+     *
      * @param Response $response Response da NFSe emitida/consultada
      * @param array $dadosAdicionais Dados adicionais para o PDF
      * @return string PDF em base64
@@ -574,7 +574,7 @@ class Tools
 
     /**
      * Faz chamada REST para a API do Portal Nacional de NFSe
-     * 
+     *
      * @param string $method Método HTTP (POST, GET, etc.)
      * @param string $endpoint Endpoint da API (ex: /nfse, /lote)
      * @param string $xml XML da requisição (DPS assinada)
@@ -755,7 +755,7 @@ class Tools
                     }
                 }
 
-                // Se a mensagem de erro já contém "Resposta da API:" (erros estruturados), 
+                // Se a mensagem de erro já contém "Resposta da API:" (erros estruturados),
                 // retorna apenas essa parte limpa, sem detalhes técnicos
                 if (strpos($mensagemErro, 'Resposta da API:') !== false) {
                     throw new CommunicationException($mensagemErro, $statusCode);
@@ -843,7 +843,7 @@ class Tools
                 }
             }
 
-            // Se a mensagem já contém "Resposta da API:" (erros estruturados), 
+            // Se a mensagem já contém "Resposta da API:" (erros estruturados),
             // retorna apenas essa parte limpa, sem detalhes técnicos
             if (strpos($mensagem, 'Resposta da API:') !== false && strpos($mensagem, 'Falha na comunicação') === false) {
                 throw new CommunicationException($mensagem, (int) ($e->getCode() ?: 500), $e);
@@ -864,14 +864,13 @@ class Tools
 
     /**
      * Formata XML para exibição (identado e escapado para HTML)
-     * Baseado no padrão usado em gera_nfe_etapa1.php
      */
     private function formatXml(string $xml): string
     {
         // Remove espaços em branco extras e quebras de linha no início
         $xml = trim($xml);
 
-        // Tenta formatar o XML usando DOMDocument (mesmo padrão do debug de NFe)
+        // Tenta formatar o XML usando DOMDocument
         $dom = new \DOMDocument('1.0', 'UTF-8');
         $dom->preserveWhiteSpace = false;
         $dom->formatOutput = true;
@@ -889,7 +888,6 @@ class Tools
 
         // Escapa caracteres HTML para exibição segura em HTML
         // Usa apenas ENT_QUOTES para compatibilidade com versões antigas do PHP
-        // Mesmo padrão usado em gera_nfe_etapa1.php: htmlspecialchars($formattedXml)
         return htmlspecialchars($xmlFormatado, ENT_QUOTES, 'UTF-8');
     }
 
@@ -928,7 +926,7 @@ class Tools
 
     /**
      * Extrai e formata erros de schema (RNG9997) de forma mais clara para o usuário
-     * 
+     *
      * @param string $mensagemErro Mensagem de erro completa do schema
      * @return string Mensagem formatada e clara para o usuário
      */
@@ -1101,9 +1099,9 @@ class Tools
     /**
      * Gera XML do evento de cancelamento no formato SPED
      * Conforme Anexo II - Eventos do Sistema Nacional
-     * 
+     *
      * O XML do evento segue o padrão do SPED para eventos de NFS-e
-     * 
+     *
      * @return array ['xml' => string, 'idEvento' => string]
      */
     private function gerarXmlEventoCancelamento(string $chaveAcesso, string $motivo, int $nPedRegEvento = 1): array
@@ -1292,7 +1290,7 @@ class Tools
                     $mensagemErro = substr($body, 0, 1000);
                 }
 
-                // Se a mensagem de erro já contém "Resposta da API:" (erros estruturados), 
+                // Se a mensagem de erro já contém "Resposta da API:" (erros estruturados),
                 // retorna apenas essa parte limpa, sem detalhes técnicos
                 if (strpos($mensagemErro, 'Resposta da API:') !== false) {
                     throw new CommunicationException($mensagemErro, $statusCode);
@@ -1398,7 +1396,7 @@ class Tools
                 );
             }
 
-            // Se a mensagem já contém "Resposta da API:" (erros estruturados), 
+            // Se a mensagem já contém "Resposta da API:" (erros estruturados),
             // retorna apenas essa parte limpa, sem detalhes técnicos
             if (strpos($mensagem, 'Resposta da API:') !== false) {
                 throw new CommunicationException($mensagem, (int)($e->getCode() ?: 500), $e);

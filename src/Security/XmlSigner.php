@@ -11,7 +11,9 @@ use RobRichards\XMLSecLibs\XMLSecurityKey;
 
 class XmlSigner
 {
-    public function __construct(private readonly Certificate $certificate) {}
+    public function __construct(private readonly Certificate $certificate)
+    {
+    }
 
     public function sign(string $xml, string $tagName = 'InfDps', ?string $referenceId = null): string
     {

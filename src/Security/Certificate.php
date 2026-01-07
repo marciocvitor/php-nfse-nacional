@@ -29,8 +29,8 @@ class Certificate
 
     /**
      * Cria instância a partir de arquivo PFX ou conteúdo binário
-     * Compatível com nfephp-org (aceita conteúdo binário diretamente)
-     * 
+     * Aceita conteúdo binário diretamente
+     *
      * @param string $pfxPathOrContent Caminho do arquivo PFX ou conteúdo binário do certificado
      * @param string $passphrase Senha do certificado
      * @return self
@@ -39,7 +39,7 @@ class Certificate
     {
         // Verifica se é caminho de arquivo ou conteúdo binário
         $pfxContent = self::getPfxContent($pfxPathOrContent);
-        
+
         if ($pfxContent === false || $pfxContent === '') {
             throw new CertificateException('Conteúdo do certificado PFX inválido ou vazio');
         }
@@ -76,9 +76,9 @@ class Certificate
     }
 
     /**
-     * Alias para fromPfx() - compatibilidade com nfephp-org
-     * Aceita conteúdo binário diretamente, igual ao readPfx() do nfephp-org
-     * 
+     * Alias para fromPfx()
+     * Aceita conteúdo binário diretamente
+     *
      * @param string $pfxPathOrContent Caminho do arquivo PFX ou conteúdo binário
      * @param string $passphrase Senha do certificado
      * @return self
@@ -91,8 +91,7 @@ class Certificate
     /**
      * Extrai o conteúdo binário do PFX
      * Aceita tanto caminho de arquivo quanto conteúdo binário diretamente
-     * Compatível com nfephp-org (readPfx aceita conteúdo binário)
-     * 
+     *
      * @param string $pfxPathOrContent Caminho do arquivo ou conteúdo binário
      * @return string|false Conteúdo binário do PFX ou false em caso de erro
      */
@@ -105,7 +104,7 @@ class Certificate
                 return $content;
             }
         }
-        
+
         // Se não for arquivo, assume que é conteúdo binário
         // Verifica se tem tamanho mínimo de um PFX válido (geralmente > 1KB)
         if (strlen($pfxPathOrContent) > 0) {
@@ -115,11 +114,11 @@ class Certificate
                 // Parece ser um caminho de arquivo que não existe
                 throw new CertificateException("Certificado não encontrado: {$pfxPathOrContent}");
             }
-            
+
             // Assume que é conteúdo binário
             return $pfxPathOrContent;
         }
-        
+
         return false;
     }
 
@@ -191,4 +190,3 @@ class Certificate
         return $chain;
     }
 }
-

@@ -9,4 +9,3 @@ enum SchemaType: string
     case DPS = 'EnviarDpsEnvio';
     case LOTE = 'EnviarLoteRpsEnvio';
 }
-

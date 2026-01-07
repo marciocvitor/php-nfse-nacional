@@ -9,7 +9,7 @@ use TCPDF;
 
 /**
  * Gerador de DANFSe (Documento Auxiliar da Nota Fiscal de Serviço Eletrônica) em PDF
- * 
+ *
  * @package NFSeNacional\Pdf
  */
 class DanfseGenerator
@@ -70,7 +70,7 @@ class DanfseGenerator
         $this->pdf->SetTitle('DANFSe - Documento Auxiliar da NFSe');
         $this->pdf->SetSubject('DANFSe');
         $this->pdf->SetKeywords('NFSe, DANFSe, Nota Fiscal de Serviço');
-        
+
         $this->pdf->setPrintHeader(false);
         $this->pdf->setPrintFooter(false);
         $this->pdf->SetMargins(10, 10, 10);
@@ -87,15 +87,15 @@ class DanfseGenerator
         $this->pdf->SetFont('helvetica', 'B', 16);
         $this->pdf->SetFillColor(200, 200, 200);
         $this->pdf->Rect(10, 10, 190, 15, 'F');
-        
+
         $this->pdf->SetXY(10, 12);
         $this->pdf->Cell(190, 10, 'DANFSe - Documento Auxiliar da Nota Fiscal de Serviço Eletrônica', 0, 1, 'C');
-        
+
         $this->pdf->SetFont('helvetica', '', 10);
         $this->pdf->SetXY(10, 22);
         $this->pdf->Cell(95, 6, 'Número: ' . ($dados['numero'] ?? '---'), 0, 0, 'L');
         $this->pdf->Cell(95, 6, 'Código de Verificação: ' . ($dados['codigoVerificacao'] ?? '---'), 0, 1, 'R');
-        
+
         $this->pdf->SetXY(10, 28);
         $this->pdf->Cell(95, 6, 'Data de Emissão: ' . ($dados['dataEmissao'] ?? '---'), 0, 0, 'L');
         $this->pdf->Cell(95, 6, 'Competência: ' . ($dados['competencia'] ?? '---'), 0, 1, 'R');
@@ -109,15 +109,15 @@ class DanfseGenerator
         $this->pdf->Rect(10, $y, 190, 8, 'F');
         $this->pdf->SetXY(10, $y + 2);
         $this->pdf->Cell(190, 6, 'DADOS DO PRESTADOR DE SERVIÇOS', 0, 1, 'L');
-        
+
         $y += 10;
         $this->pdf->SetFont('helvetica', '', 10);
         $prestador = $dados['prestador'] ?? [];
-        
+
         $this->pdf->SetXY(10, $y);
         $this->pdf->Cell(95, 6, 'Razão Social: ' . ($prestador['razaoSocial'] ?? '---'), 0, 0, 'L');
         $this->pdf->Cell(95, 6, 'CNPJ: ' . $this->formatarCnpj($prestador['cnpj'] ?? ''), 0, 1, 'L');
-        
+
         $y += 6;
         $this->pdf->SetXY(10, $y);
         $this->pdf->Cell(95, 6, 'Inscrição Municipal: ' . ($prestador['im'] ?? '---'), 0, 1, 'L');
@@ -131,19 +131,19 @@ class DanfseGenerator
         $this->pdf->Rect(10, $y, 190, 8, 'F');
         $this->pdf->SetXY(10, $y + 2);
         $this->pdf->Cell(190, 6, 'DADOS DO TOMADOR DE SERVIÇOS', 0, 1, 'L');
-        
+
         $y += 10;
         $this->pdf->SetFont('helvetica', '', 10);
         $tomador = $dados['tomador'] ?? [];
-        
+
         $this->pdf->SetXY(10, $y);
         $this->pdf->Cell(95, 6, 'Razão Social/Nome: ' . ($tomador['razaoSocial'] ?? '---'), 0, 0, 'L');
-        
+
         $documento = $tomador['cpfCnpj'] ?? '';
         $tipoDoc = strlen($documento) === 11 ? 'CPF' : 'CNPJ';
         $docFormatado = $tipoDoc === 'CPF' ? $this->formatarCpf($documento) : $this->formatarCnpj($documento);
         $this->pdf->Cell(95, 6, $tipoDoc . ': ' . $docFormatado, 0, 1, 'L');
-        
+
         if (!empty($tomador['email'])) {
             $y += 6;
             $this->pdf->SetXY(10, $y);
@@ -159,15 +159,15 @@ class DanfseGenerator
         $this->pdf->Rect(10, $y, 190, 8, 'F');
         $this->pdf->SetXY(10, $y + 2);
         $this->pdf->Cell(190, 6, 'DADOS DO SERVIÇO', 0, 1, 'L');
-        
+
         $y += 10;
         $this->pdf->SetFont('helvetica', '', 10);
         $servico = $dados['servico'] ?? [];
-        
+
         $this->pdf->SetXY(10, $y);
         $this->pdf->Cell(95, 6, 'Item da Lista de Serviço: ' . ($servico['itemListaServico'] ?? '---'), 0, 0, 'L');
         $this->pdf->Cell(95, 6, 'Código do Município: ' . ($servico['codigoMunicipio'] ?? '---'), 0, 1, 'L');
-        
+
         $y += 6;
         $this->pdf->SetXY(10, $y);
         $discriminacao = $servico['discriminacao'] ?? '---';
@@ -182,19 +182,19 @@ class DanfseGenerator
         $this->pdf->Rect(10, $y, 190, 8, 'F');
         $this->pdf->SetXY(10, $y + 2);
         $this->pdf->Cell(190, 6, 'VALORES', 0, 1, 'L');
-        
+
         $y += 10;
         $this->pdf->SetFont('helvetica', '', 10);
         $servico = $dados['servico'] ?? [];
-        
+
         $this->pdf->SetXY(10, $y);
         $this->pdf->Cell(95, 6, 'Valor dos Serviços: ' . $this->formatarMoeda($servico['valorServicos'] ?? 0), 0, 0, 'L');
         $this->pdf->Cell(95, 6, 'Alíquota: ' . $this->formatarPercentual($servico['aliquota'] ?? 0), 0, 1, 'L');
-        
+
         $y += 6;
         $this->pdf->SetXY(10, $y);
         $this->pdf->Cell(95, 6, 'Valor do ISS: ' . $this->formatarMoeda($servico['valorIss'] ?? 0), 0, 0, 'L');
-        
+
         $issRetido = $servico['issRetido'] ?? 2;
         $statusRetido = $issRetido === 1 ? 'Sim' : 'Não';
         $this->pdf->Cell(95, 6, 'ISS Retido: ' . $statusRetido, 0, 1, 'L');
@@ -205,17 +205,17 @@ class DanfseGenerator
         $y = $this->pdf->GetY() + 10;
         $this->pdf->SetFont('helvetica', '', 8);
         $this->pdf->SetTextColor(100, 100, 100);
-        
+
         $codigoVerificacao = $dados['codigoVerificacao'] ?? '';
         $urlConsulta = 'https://www.nfse.gov.br/consulta';
-        
+
         $this->pdf->SetXY(10, $y);
         $this->pdf->Cell(190, 5, 'Código de Verificação: ' . $codigoVerificacao, 0, 1, 'C');
-        
+
         $y += 5;
         $this->pdf->SetXY(10, $y);
         $this->pdf->Cell(190, 5, 'Consulte a autenticidade em: ' . $urlConsulta, 0, 1, 'C');
-        
+
         $y += 5;
         $this->pdf->SetXY(10, $y);
         $this->pdf->Cell(190, 5, 'Este documento é uma representação gráfica da NFSe e não substitui o XML original.', 0, 1, 'C');
@@ -269,7 +269,7 @@ class DanfseGenerator
             $cnpjNode = $tomador->xpath('.//Cnpj');
             $razaoNode = $tomador->xpath('.//RazaoSocial');
             $emailNode = $tomador->xpath('.//Email');
-            
+
             $dados['tomador'] = [
                 'cpfCnpj' => !empty($cpfNode) ? (string) $cpfNode[0] : (!empty($cnpjNode) ? (string) $cnpjNode[0] : ''),
                 'razaoSocial' => !empty($razaoNode) ? (string) $razaoNode[0] : '',
@@ -323,4 +323,3 @@ class DanfseGenerator
         return number_format($percentual * 100, 2, ',', '.') . '%';
     }
 }
-

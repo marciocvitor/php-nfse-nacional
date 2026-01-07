@@ -8,7 +8,9 @@
 [![GitHub Stars](https://img.shields.io/github/stars/marciocvitor/php-nfse-nacional)](https://github.com/marciocvitor/php-nfse-nacional/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/marciocvitor/php-nfse-nacional)](https://github.com/marciocvitor/php-nfse-nacional/network)
 
-Biblioteca PHP open source para emissão de **Nota Fiscal de Serviço Eletrônica (NFSe)** no **Portal Nacional** seguindo o padrão **ABRASF**, com validação de schemas e assinatura XML no mesmo nível praticado pela **[nfephp-org](https://github.com/nfephp-org)**.
+Biblioteca PHP open source para emissão de **Nota Fiscal de Serviço Eletrônica (NFSe)** no **Portal Nacional** seguindo o padrão **ABRASF**, com validação de schemas e assinatura XML.
+
+Este pacote é aderente com os **PSR-1**, **PSR-2** e **PSR-4**. Se você observar negligências de conformidade, por favor envie um patch via pull request.
 
 ---
 
@@ -241,7 +243,7 @@ php-nfse-nacional/
 - [x] Cancelamento (`CancelarNfse`)
 - [x] Download de DANFSe oficial da API (`baixarDanfse`)
 - [x] Configuração automática de URLs baseada no ambiente
-- [x] Sistema de log com versão e NT (similar ao nfephp-org)
+- [x] Sistema de log com versão e NT
 - [x] Geração de DANFSe/PDF (Documento Auxiliar da NFSe)
 - [x] API REST
 - [ ] Integração com filas/persistência (em desenvolvimento)
@@ -250,7 +252,7 @@ php-nfse-nacional/
 
 ## Sistema de Log e Controle de Versão
 
-A biblioteca possui sistema de log automático que registra todas as operações com **data, versão do layout e Nota Técnica (NT)** aplicada, similar ao nfephp-org.
+A biblioteca possui sistema de log automático que registra todas as operações com **data, versão do layout e Nota Técnica (NT)** aplicada.
 
 ### Arquivos de Controle
 
@@ -354,12 +356,6 @@ Se este projeto te ajudou, considere fazer uma doação para manter o desenvolvi
 
 <img alt="QR Code PIX" src="https://quickchart.io/qr?text=00020101021226580014br.gov.bcb.pix0136f9487794-a822-474e-8c49-041ef272f4545204000053039865802BR5907DOACOES6008BRASILIA62100506DOACAO63049650&size=220" width="220" height="220" />
 
-PIX (copia e cola):
-
-```
-00020101021226580014br.gov.bcb.pix0136f9487794-a822-474e-8c49-041ef272f4545204000053039865802BR5907DOACOES6008BRASILIA62100506DOACAO63049650
-```
-
 📧 **Contato**: Entre em contato através das [Issues](https://github.com/marciocvitor/php-nfse-nacional/issues)
 
 ---
@@ -430,7 +426,6 @@ Este projeto adere a um Código de Conduta. Ao participar, você concorda em man
 ## 🙏 Acknowledgments
 
 * A todos os colegas que colaboram de alguma forma com o desenvolvimento contínuo desta biblioteca
-* Inspirado nos padrões de qualidade do [nfephp-org](https://github.com/nfephp-org)
 
 ---
 

@@ -65,7 +65,7 @@ class Config
     /**
      * Obtém a URL base da API REST conforme ambiente
      * Baseado nas URLs oficiais do Portal Nacional de NFSe
-     * 
+     *
      * @return string URL base da API (ex: https://sefin.nfse.gov.br)
      */
     public function getApiBaseUrl(): string
@@ -74,7 +74,7 @@ class Config
         if (!empty($this->apiBaseUrl)) {
             return rtrim($this->apiBaseUrl, '/');
         }
-        
+
         // URLs oficiais do Portal Nacional de NFSe
         // Conforme documentação oficial e relatos de usuários
         // O endpoint correto é sefin.producaorestrita.nfse.gov.br/sefinnacional/
@@ -89,7 +89,7 @@ class Config
 
     /**
      * Obtém o endpoint completo para uma operação
-     * 
+     *
      * @param string $endpoint Endpoint da API (ex: /nfse, /lote, /consulta, /danfse/{chaveAcesso})
      * @return string URL completa
      */
@@ -116,7 +116,7 @@ class Config
         // Homologação: https://sefin.producaorestrita.nfse.gov.br/SefinNacional/nfse (sem /API/)
         // Produção: https://sefin.nfse.gov.br/sefinnacional/nfse (sem /API/)
         // Conforme documentação: https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/
-        
+
         if ($this->ambiente == 1) {
             // Produção: /sefinnacional/ (minúsculo)
             if (!str_starts_with($endpoint, 'sefinnacional/')) {
@@ -128,7 +128,7 @@ class Config
                 $endpoint = 'SefinNacional/' . $endpoint;
             }
         }
-        
+
         return $baseUrl . '/' . $endpoint;
     }
 
@@ -140,4 +140,3 @@ class Config
         return $this->ambiente == 1 ? 'Produção' : 'Homologação';
     }
 }
-

@@ -7,13 +7,13 @@ namespace NFSeNacional\Common;
 /**
  * Sistema de log para operações NFSe
  * Registra data, versão do layout e NT aplicada
- * 
+ *
  * @package NFSeNacional\Common
  */
 class Logger
 {
     private const LOG_FORMAT = "[%s] %s | Versão: %s | NT: %s | %s | %s" . PHP_EOL;
-    
+
     private string $logFile;
     private string $versaoLayout;
     private string $notaTecnica;
@@ -21,11 +21,11 @@ class Logger
     public function __construct(?string $logDir = null)
     {
         $logDir = $logDir ?? sys_get_temp_dir() . '/nfse-nacional';
-        
+
         if (!is_dir($logDir) && !mkdir($logDir, 0755, true) && !is_dir($logDir)) {
             throw new \RuntimeException("Não foi possível criar diretório de log: {$logDir}");
         }
-        
+
         $this->logFile = $logDir . '/nfse-operacoes.log';
         $this->versaoLayout = $this->loadVersaoLayout();
         $this->notaTecnica = $this->loadNotaTecnica();
@@ -38,7 +38,7 @@ class Logger
     {
         $dataHora = date('Y-m-d H:i:s');
         $contextoStr = empty($contexto) ? '' : json_encode($contexto, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        
+
         $logEntry = sprintf(
             self::LOG_FORMAT,
             $dataHora,
@@ -48,7 +48,7 @@ class Logger
             $mensagem,
             $contextoStr
         );
-        
+
         file_put_contents($this->logFile, $logEntry, FILE_APPEND | LOCK_EX);
     }
 
@@ -57,10 +57,10 @@ class Logger
      */
     public function logEnvioDps(string $numeroDps, bool $sucesso, ?string $numeroNfse = null, ?string $erro = null): void
     {
-        $mensagem = $sucesso 
+        $mensagem = $sucesso
             ? "DPS enviado com sucesso. NFSe: {$numeroNfse}"
             : "Falha ao enviar DPS. Erro: {$erro}";
-            
+
         $this->log('EnviarDps', $mensagem, [
             'numeroDps' => $numeroDps,
             'numeroNfse' => $numeroNfse,
@@ -77,7 +77,7 @@ class Logger
         $mensagem = $sucesso
             ? "Lote enviado com sucesso. Protocolo: {$protocolo}"
             : "Falha ao enviar lote. Erro: {$erro}";
-            
+
         $this->log('EnviarLoteRps', $mensagem, [
             'numeroLote' => $numeroLote,
             'quantidadeDps' => $quantidadeDps,
@@ -95,7 +95,7 @@ class Logger
         $mensagem = $sucesso
             ? "Lote consultado. Situação: {$situacao}"
             : "Falha ao consultar lote. Erro: {$erro}";
-            
+
         $this->log('ConsultarLoteRps', $mensagem, [
             'protocolo' => $protocolo,
             'situacao' => $situacao,
@@ -112,7 +112,7 @@ class Logger
         $mensagem = $sucesso
             ? "NFSe cancelada com sucesso"
             : "Falha ao cancelar NFSe. Erro: {$erro}";
-            
+
         $this->log('CancelarNfse', $mensagem, [
             'numeroNfse' => $numeroNfse,
             'sucesso' => $sucesso,
@@ -128,7 +128,7 @@ class Logger
         $mensagem = $sucesso
             ? "XML validado com sucesso"
             : "XML inválido. Erro: {$erro}";
-            
+
         $this->log('ValidarXml', $mensagem, [
             'tipoSchema' => $tipoSchema,
             'sucesso' => $sucesso,
@@ -142,14 +142,14 @@ class Logger
     private function loadVersaoLayout(): string
     {
         $versionFile = dirname(__DIR__, 2) . '/VERSION.txt';
-        
+
         if (is_file($versionFile)) {
             $versao = trim(file_get_contents($versionFile));
             if ($versao !== '') {
                 return $versao;
             }
         }
-        
+
         // Versão padrão se arquivo não existir
         return '1.00';
     }
@@ -160,14 +160,14 @@ class Logger
     private function loadNotaTecnica(): string
     {
         $ntFile = dirname(__DIR__, 2) . '/NT.txt';
-        
+
         if (is_file($ntFile)) {
             $nt = trim(file_get_contents($ntFile));
             if ($nt !== '') {
                 return $nt;
             }
         }
-        
+
         // NT padrão se arquivo não existir
         return 'NT inicial - Layout 1.00';
     }
@@ -196,4 +196,3 @@ class Logger
         return $this->notaTecnica;
     }
 }
-

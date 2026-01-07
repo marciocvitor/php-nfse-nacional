@@ -6,7 +6,7 @@ namespace NFSeNacional\Common;
 
 /**
  * Classe para padronização de respostas
- * 
+ *
  * @package NFSeNacional\Common
  */
 class Response
@@ -19,18 +19,19 @@ class Response
         public ?string $codigoVerificacao = null,
         public ?string $xml = null,
         public array $erros = []
-    ) {}
-    
+    ) {
+    }
+
     public function addErro(string $mensagem, ?int $codigo = null): self
     {
         $this->erros[] = [
             'mensagem' => $mensagem,
             'codigo' => $codigo
         ];
-        
+
         return $this;
     }
-    
+
     public function toArray(): array
     {
         return [
@@ -42,7 +43,7 @@ class Response
             'erros' => $this->erros
         ];
     }
-    
+
     public function toJson(): string
     {
         return json_encode($this->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);

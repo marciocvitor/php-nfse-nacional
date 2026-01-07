@@ -10,7 +10,7 @@ use Mpdf\Mpdf;
 /**
  * Gerador de DANFSe (Documento Auxiliar da Nota Fiscal de Serviço Eletrônica) em PDF
  * Usa mPDF para gerar PDF com layout similar ao oficial do Portal Nacional
- * 
+ *
  * @package NFSeNacional\Pdf
  */
 class DanfseGeneratorNacional
@@ -431,12 +431,12 @@ class DanfseGeneratorNacional
         // Garantir que valorServico não fique zerado - usar valorTotal como fallback
         $vServ = $dados['valorServico'] ?? $dados['vServ'] ?? 0;
         $vLiq = $dados['valorTotal'] ?? $dados['vLiq'] ?? 0;
-        
+
         // Se valorServico estiver zerado mas valorTotal não, usar valorTotal
         if ($vServ == 0 && $vLiq > 0) {
             $vServ = $vLiq;
         }
-        
+
         $vServ = $this->formatarMoeda($vServ);
         $vLiq = $this->formatarMoeda($vLiq);
 
@@ -672,7 +672,7 @@ class DanfseGeneratorNacional
                     $dados['vLiq'] = (float)trim($vLiqNodes->item(0)->nodeValue);
                     $dados['valorTotal'] = $dados['vLiq'];
                 }
-                
+
                 // Fallback para Valor Líquido/Total: se não encontrou vLiq, usar vServ
                 if (!isset($dados['valorTotal']) || $dados['valorTotal'] <= 0) {
                     if ($dados['valorServico'] > 0) {
@@ -777,11 +777,21 @@ class DanfseGeneratorNacional
     private function formatarEndereco(array $endereco): string
     {
         $parts = [];
-        if (!empty($endereco['xLgr'])) $parts[] = $endereco['xLgr'];
-        if (!empty($endereco['nro'])) $parts[] = $endereco['nro'];
-        if (!empty($endereco['xCpl'])) $parts[] = $endereco['xCpl'];
-        if (!empty($endereco['xBairro'])) $parts[] = $endereco['xBairro'];
-        if (!empty($endereco['CEP'])) $parts[] = 'CEP: ' . $this->formatarCep($endereco['CEP']);
+        if (!empty($endereco['xLgr'])) {
+            $parts[] = $endereco['xLgr'];
+        }
+        if (!empty($endereco['nro'])) {
+            $parts[] = $endereco['nro'];
+        }
+        if (!empty($endereco['xCpl'])) {
+            $parts[] = $endereco['xCpl'];
+        }
+        if (!empty($endereco['xBairro'])) {
+            $parts[] = $endereco['xBairro'];
+        }
+        if (!empty($endereco['CEP'])) {
+            $parts[] = 'CEP: ' . $this->formatarCep($endereco['CEP']);
+        }
 
         return implode(', ', $parts);
     }
