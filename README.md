@@ -15,7 +15,7 @@ Biblioteca PHP open source para emissão de **Nota Fiscal de Serviço Eletrônic
 ## 🚀 Atualizações Recentes
 
 * Layout 1.00 - Portal Nacional NFSe
-* API REST (migração completa de SOAP para REST)
+* API REST
 * Suporte a envio em lote (até 50 DPS)
 * Geração de DANFSe em PDF
 * Sistema de log com versão e NT
@@ -243,7 +243,7 @@ php-nfse-nacional/
 - [x] Configuração automática de URLs baseada no ambiente
 - [x] Sistema de log com versão e NT (similar ao nfephp-org)
 - [x] Geração de DANFSe/PDF (Documento Auxiliar da NFSe)
-- [x] API REST (migração completa de SOAP para REST)
+- [x] API REST
 - [ ] Integração com filas/persistência (em desenvolvimento)
 
 ---
@@ -352,14 +352,13 @@ Este projeto é mantido com ❤️ pela comunidade. Você pode apoiar de várias
 
 Se este projeto te ajudou, considere fazer uma doação para manter o desenvolvimento ativo.
 
-### 💼 Serviços Comerciais
+<img alt="QR Code PIX" src="https://quickchart.io/qr?text=00020101021226580014br.gov.bcb.pix0136f9487794-a822-474e-8c49-041ef272f4545204000053039865802BR5907DOACOES6008BRASILIA62100506DOACAO63049650&size=220" width="220" height="220" />
 
-Precisa de ajuda profissional? Oferecemos:
+PIX (copia e cola):
 
-- ✅ **Consultoria de Integração** - Implementação customizada e suporte técnico
-- ✅ **Suporte Prioritário** - SLA garantido e resposta rápida
-- ✅ **Treinamentos** - Cursos presenciais e online
-- ✅ **Desenvolvimento Customizado** - Funcionalidades sob medida
+```
+00020101021226580014br.gov.bcb.pix0136f9487794-a822-474e-8c49-041ef272f4545204000053039865802BR5907DOACOES6008BRASILIA62100506DOACAO63049650
+```
 
 📧 **Contato**: Entre em contato através das [Issues](https://github.com/marciocvitor/php-nfse-nacional/issues)
 
