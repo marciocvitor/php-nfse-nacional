@@ -120,16 +120,10 @@ class XmlSigner
         $key->loadKey($this->certificate->getPrivateKey());
         $objDSig->sign($key);
 
-        // Adicionar certificado principal e cadeia completa (se disponível)
-        // Tentar incluir a cadeia completa para melhor validação pelo Portal Nacional
-        $certChain = $this->certificate->getCertificateChain();
-        if ($certChain !== $this->certificate->getCertificate()) {
-            // Se houver certificados intermediários, incluir a cadeia completa
-            $objDSig->add509Cert($certChain);
-        } else {
-            // Caso contrário, incluir apenas o certificado principal
-            $objDSig->add509Cert($this->certificate->getCertificate());
-        }
+        // Apenas o certificado do emitente (e-CNPJ/e-CPF) no KeyInfo.
+        // PFX com cadeia completa no PKCS#12 gerava vários X509Certificate na assinatura
+        // e rejeição E0714 no Portal Nacional; emissões que funcionam usam só o leaf.
+        $objDSig->add509Cert($this->certificate->getCertificate());
 
         // Adicionar a assinatura no elemento raiz (NFSe) em vez de dentro do infDPS
         // Isso fará com que a assinatura apareça após </infNFSe>
