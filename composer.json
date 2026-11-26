@@ -1,21 +1,22 @@
 {
     "name": "php-nfse/nfse-nacional",
-    "description": "Biblioteca PHP para emissão de NFSe no Portal Nacional - Padrão ABRASF",
+    "description": "Biblioteca PHP para emissão de NFS-e no Portal Nacional, conforme NT 009 v1.01 (Reforma Tributária)",
     "keywords": [
         "nfse",
         "nota fiscal",
         "nota fiscal de serviço",
         "portal nacional",
-        "abrasf",
-        "sped",
+        "reforma tributária",
+        "ibs",
+        "cbs",
         "fiscal"
     ],
     "type": "library",
     "license": "MIT",
     "authors": [
         {
-            "name": "Comunidade PHP NFSe",
-            "email": "contato@php-nfse.org",
+            "name": "Márcio Vitor",
+            "email": "marcio.vitor@sisteminas.com.br",
             "role": "Developer"
         }
     ],
@@ -23,7 +24,6 @@
         "php": ">=8.2",
         "ext-json": "*",
         "ext-openssl": "*",
-        "ext-soap": "*",
         "ext-dom": "*",
         "ext-simplexml": "*",
         "ext-libxml": "*",
