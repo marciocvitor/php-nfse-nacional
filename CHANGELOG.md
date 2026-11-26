@@ -7,6 +7,15 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [2.0.3] - 2026-11-26
+
+### Adicionado
+
+- **Marca d'água "CANCELADA" no DANFSe local.** `DanfseGeneratorNacional::gerar($response, $dadosAdicionais = [], bool $canceled = false)` e `Tools::obterDanfse($chave, $xml, $dadosAdicionais = [], bool $canceled = false)` aceitam o novo parâmetro opcional. Com `true`, o PDF recebe a palavra CANCELADA em vermelho (`#fb0000`), diagonal (50°), tamanho 120 e opacidade 0,4, desenhada no próprio mPDF antes do `WriteHTML` (o PDF pronto não é reaberto). O status de cancelamento não consta no XML autorizado, então quem usa a biblioteca precisa informá-lo (no ERP, `nfse_cod_status = 135`).
+- Sem o parâmetro, ou com `false`, o PDF sai igual ao da 2.0.2. O PDF oficial da API, quando disponível, vem pronto e não recebe a marca.
+
+---
+
 ## [2.0.2] - 2026-11-26
 
 Correções confirmadas em homologação (SEFIN produção restrita, `tpAmb = 2`).

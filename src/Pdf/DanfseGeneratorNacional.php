@@ -40,8 +40,14 @@ class DanfseGeneratorNacional
 
     /**
      * Gera PDF do DANFSe a partir do Response da NFSe
+     *
+     * @param Response $response Response com o XML autorizado da NFS-e
+     * @param array $dadosAdicionais Dados extras que complementam/substituem os extraídos do XML
+     * @param bool $canceled Quando true, aplica a marca d'água "CANCELADA" (vermelha, diagonal).
+     *                       O status de cancelamento não consta no XML autorizado; quem usa a
+     *                       biblioteca precisa informá-lo (ex.: ERP com nfse_cod_status = 135).
      */
-    public function gerar(Response $response, array $dadosAdicionais = []): string
+    public function gerar(Response $response, array $dadosAdicionais = [], bool $canceled = false): string
     {
         if (!$response->sucesso || !$response->xml) {
             throw new \InvalidArgumentException('Response inválido ou sem XML da NFSe');
@@ -51,6 +57,13 @@ class DanfseGeneratorNacional
         $dados = array_merge($dados, $dadosAdicionais);
 
         $html = $this->gerarHTML($dados);
+
+        // A marca d'água é configurada no mesmo mPDF que monta o DANFSe, antes do WriteHTML
+        // (que cria a página); não se reabre o PDF pronto para carimbar.
+        $this->pdf->showWatermarkText = $canceled;
+        if ($canceled) {
+            $this->pdf->SetWatermarkText(new \Mpdf\WatermarkText('CANCELADA', 120, 50, '#fb0000', 0.4));
+        }
 
         $this->pdf->WriteHTML($html);
 

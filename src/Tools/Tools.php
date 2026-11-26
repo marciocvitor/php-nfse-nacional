@@ -454,11 +454,15 @@ class Tools
      * @param string $chaveAcesso Chave de acesso da NFS-e (50 dígitos)
      * @param string $xmlNfse XML autorizado da NFS-e (elemento NFSe)
      * @param array $dadosAdicionais Dados extras para o gerador local
+     * @param bool $canceled true para a NFS-e cancelada: o gerador local aplica a marca d'água
+     *                       "CANCELADA". O cancelamento não consta no XML autorizado, então o
+     *                       chamador informa (ex.: ERP com nfse_cod_status = 135). O PDF oficial da API,
+     *                       quando disponível, vem pronto e não recebe a marca.
      * @return array{pdf: string, origem: string} origem = 'api' (oficial) ou 'local' (gerador da biblioteca)
      * @throws \InvalidArgumentException Se a API estiver indisponível e o XML não for informado
      * @throws \RuntimeException Se o gerador local não puder ser usado (mpdf ausente)
      */
-    public function obterDanfse(string $chaveAcesso, string $xmlNfse, array $dadosAdicionais = []): array
+    public function obterDanfse(string $chaveAcesso, string $xmlNfse, array $dadosAdicionais = [], bool $canceled = false): array
     {
         try {
             return ['pdf' => $this->baixarDanfse($chaveAcesso), 'origem' => 'api'];
@@ -474,11 +478,12 @@ class Tools
         }
 
         $response = new Response(sucesso: true, xml: $xmlNfse);
-        $pdf = (new DanfseGeneratorNacional())->gerar($response, $dadosAdicionais);
+        $pdf = (new DanfseGeneratorNacional())->gerar($response, $dadosAdicionais, $canceled);
 
         $this->logger->log('ObterDanfse', "DANFSe gerado localmente: {$chaveAcesso}", [
             'chaveAcesso' => $chaveAcesso,
             'origem' => 'local',
+            'cancelada' => $canceled,
             'tamanhoPdf' => strlen($pdf),
         ]);
 

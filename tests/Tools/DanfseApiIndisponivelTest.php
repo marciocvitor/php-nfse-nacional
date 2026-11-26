@@ -15,6 +15,7 @@ use NFSeNacional\Config\Config;
 use NFSeNacional\Exception\CommunicationException;
 use NFSeNacional\Exception\DanfseIndisponivelException;
 use NFSeNacional\Security\Certificate;
+use NFSeNacional\Tests\Pdf\PdfConteudo;
 use NFSeNacional\Tools\Tools;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -201,5 +202,23 @@ class DanfseApiIndisponivelTest extends TestCase
         $this->assertStringStartsWith('%PDF', $primeiro['pdf']);
         $this->assertSame('local', $segundo['origem']);
         $this->assertCount(1, $mock, 'a API só pode ser consultada uma vez');
+    }
+
+    public function testObterDanfseEncaminhaCanceledParaOGeradorLocal(): void
+    {
+        if (!class_exists(\Mpdf\Mpdf::class)) {
+            $this->markTestSkipped('mpdf/mpdf não instalado');
+        }
+
+        [$tools] = $this->criarTools([$this->erroTls()]);
+
+        $cancelada = $tools->obterDanfse(self::CHAVE, DanfseXmlFixture::NFSE, [], true);
+        $normal = $tools->obterDanfse(self::CHAVE, DanfseXmlFixture::NFSE);
+        $normalFalse = $tools->obterDanfse(self::CHAVE, DanfseXmlFixture::NFSE, [], false);
+
+        $this->assertSame('local', $cancelada['origem']);
+        $this->assertTrue(PdfConteudo::temMarcaCancelada($cancelada['pdf']));
+        $this->assertFalse(PdfConteudo::temMarcaCancelada($normal['pdf']), 'padrão é não cancelada');
+        $this->assertFalse(PdfConteudo::temMarcaCancelada($normalFalse['pdf']));
     }
 }
