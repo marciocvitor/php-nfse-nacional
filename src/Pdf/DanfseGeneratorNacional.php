@@ -370,7 +370,8 @@ class DanfseGeneratorNacional
         $vServ = $this->formatarMoeda($dados['valorServico'] ?? $dados['vServ'] ?? 0);
         $bcIssqn = $this->formatarMoeda($tribMun['bcIssqn'] ?? 0);
         $aliquota = $this->formatarPercentual($tribMun['aliquota'] ?? 0);
-        $issRetido = ($tribMun['issRetido'] ?? 0) == 1 ? 'Sim' : 'Não';
+        // tpRetISSQN: 1 = não retido; 2 = retido pelo tomador; 3 = retido pelo intermediário
+        $issRetido = in_array((int) ($tribMun['issRetido'] ?? 0), [2, 3], true) ? 'Sim' : 'Não';
         $issApurado = $this->formatarMoeda($tribMun['issApurado'] ?? 0);
 
         $html = '<div class="section-title">TRIBUTAÇÃO MUNICIPAL</div>';
@@ -549,9 +550,14 @@ class DanfseGeneratorNacional
             }
 
             if ($prest) {
+                // IM é opcional em infNFSe/emit; usa o IM da DPS (prest) quando faltar
+                $imDps = $prestadorNodes->length > 0
+                    ? $this->getNodeValue($xpath, $prestadorNodes->item(0), './/sped:IM | .//IM')
+                    : '';
+
                 $dados['prestador'] = [
                     'cnpj' => $this->getNodeValue($xpath, $prest, './/sped:CNPJ | .//CNPJ'),
-                    'im' => $this->getNodeValue($xpath, $prest, './/sped:IM | .//IM'),
+                    'im' => $this->getNodeValue($xpath, $prest, './/sped:IM | .//IM') ?: $imDps,
                     'xNome' => $this->getNodeValue($xpath, $prest, './/sped:xNome | .//xNome'),
                     'fone' => $this->getNodeValue($xpath, $prest, './/sped:fone | .//fone'),
                     'email' => $this->getNodeValue($xpath, $prest, './/sped:email | .//email'),
@@ -652,7 +658,8 @@ class DanfseGeneratorNacional
             }
 
             // Valores
-            $valoresNodes = $xpath->query('//sped:valores | //valores');
+            // valores da DPS (vServ, trib); os de infNFSe (vLiq, vBC, pAliqAplic, vISSQN) são lidos à parte
+            $valoresNodes = $xpath->query('//sped:valores[not(ancestor::sped:infNFSe)] | //valores[not(ancestor::infNFSe)]');
             if ($valoresNodes->length > 0) {
                 $valores = $valoresNodes->item(0);
                 $dados['vServ'] = (float)$this->getNodeValue($xpath, $valores, './/sped:vServ | .//vServ');
@@ -667,7 +674,11 @@ class DanfseGeneratorNacional
                     }
                 }
 
-                $vLiqNodes = $xpath->query('.//sped:vLiq | .//vLiq', $valores);
+                // Totais e ISSQN ficam em infNFSe/valores (TCValoresNFSe), não dentro de trib
+                $valoresNfseNodes = $xpath->query('//sped:infNFSe/sped:valores | //infNFSe/valores');
+                $valoresNfse = $valoresNfseNodes->length > 0 ? $valoresNfseNodes->item(0) : $valores;
+
+                $vLiqNodes = $xpath->query('.//sped:vLiq | .//vLiq', $valoresNfse);
                 if ($vLiqNodes->length > 0) {
                     $dados['vLiq'] = (float)trim($vLiqNodes->item(0)->nodeValue);
                     $dados['valorTotal'] = $dados['vLiq'];
@@ -681,7 +692,7 @@ class DanfseGeneratorNacional
                     }
                 }
 
-                $vTotalRetNodes = $xpath->query('.//sped:vTotalRet | .//vTotalRet', $valores);
+                $vTotalRetNodes = $xpath->query('.//sped:vTotalRet | .//vTotalRet', $valoresNfse);
                 if ($vTotalRetNodes->length > 0) {
                     $dados['vTotalRet'] = (float)trim($vTotalRetNodes->item(0)->nodeValue);
                 }
@@ -697,7 +708,16 @@ class DanfseGeneratorNacional
                         $tribMun = $tribMunNodes->item(0);
                         $dados['tributacao']['tribMun'] = [
                             'issRetido' => (int)$this->getNodeValue($xpath, $tribMun, './/sped:tpRetISSQN | .//tpRetISSQN'),
+                            'aliquota' => (float)$this->getNodeValue($xpath, $tribMun, './/sped:pAliq | .//pAliq'),
                         ];
+
+                        // Dados de ISSQN calculados no XML autorizado (infNFSe/valores)
+                        $aliqAplic = (float)$this->getNodeValue($xpath, $valoresNfse, './/sped:pAliqAplic | .//pAliqAplic');
+                        if ($aliqAplic > 0) {
+                            $dados['tributacao']['tribMun']['aliquota'] = $aliqAplic;
+                        }
+                        $dados['tributacao']['tribMun']['bcIssqn'] = (float)$this->getNodeValue($xpath, $valoresNfse, './/sped:vBC | .//vBC');
+                        $dados['tributacao']['tribMun']['issApurado'] = (float)$this->getNodeValue($xpath, $valoresNfse, './/sped:vISSQN | .//vISSQN');
                     }
 
                     // Tributação Federal
