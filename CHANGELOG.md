@@ -7,6 +7,24 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [Não lançado]
+
+### Adicionado
+
+- **Cabeçalho do DANFSe local no padrão nacional (referência NFS-e 3275).** Quatro colunas: logo NFS-e | "DANFSe v1.0 - Documento Auxiliar da NFS-e" | brasão e "Prefeitura Municipal de {xLocEmi}" | QR Code com a legenda de autenticidade.
+  - **Logo nacional embutido** em `src/Pdf/imagens/nfse-logo.png` (PNG 540 x 107 com transparência) e carregado automaticamente; não há parâmetro nem dependência externa.
+  - **QR Code gerado automaticamente** a partir da chave de acesso, apontando para `https://www.nfse.gov.br/ConsultaPublica/?tpc=1&chave={chave}`. Usa o `TCPDF2DBarcode` já presente (tecnickcom/tcpdf), sem dependência nova, e o resultado é reprodutível para a mesma chave.
+  - **Brasão do município opcional**, informado por quem usa a biblioteca (o RP/ERP), pois não consta no XML autorizado nem na API de parametrização. Uso: `new DanfseGeneratorNacional(['brasao' => $png])` ou `->setBrasao($png)`; aceita caminho de arquivo, bytes do PNG ou data URI `data:image/png;base64,...`. Sem brasão, o layout segue normalmente, sem a imagem. `setBrasao(null)` remove o brasão.
+  - `Tools::obterDanfse(..., ?string $brasao = null)` repassa o brasão e o retorno ganhou a chave `avisos` (lista de textos em português; vazia quando está tudo certo).
+- **Padrão exigido para o brasão** (constantes `BRASAO_*` e `DanfseGeneratorNacional::padraoBrasao()`):
+  - formato **PNG** (JPEG, GIF, BMP, WEBP etc. são recusados);
+  - no máximo **300 x 300 pixels** (recomendado **192 x 192**);
+  - no máximo **60 KB** (61.440 bytes);
+  - arquivo íntegro, que possa ser lido como imagem.
+- **Validação do brasão.** Brasão fora do padrão (formato inválido, arquivo corrompido ou truncado, dimensão ou tamanho excessivo, caminho inexistente) não é carregado: `setBrasao()`/construtor lançam `ValidationException` com mensagem em português que diz o que está errado e qual é o padrão esperado, e o brasão anterior, se houver, é mantido. `Tools::obterDanfse()` não lança: gera o DANFSe sem o brasão e devolve a mensagem em `avisos`. A geração do DANFSe nunca é interrompida por causa do brasão.
+
+---
+
 ## [2.0.3] - 2026-11-26
 
 ### Adicionado

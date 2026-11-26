@@ -458,14 +458,19 @@ class Tools
      *                       "CANCELADA". O cancelamento não consta no XML autorizado, então o
      *                       chamador informa (ex.: ERP com nfse_cod_status = 135). O PDF oficial da API,
      *                       quando disponível, vem pronto e não recebe a marca.
-     * @return array{pdf: string, origem: string} origem = 'api' (oficial) ou 'local' (gerador da biblioteca)
+     * @param string|null $brasao Brasão da prefeitura (opcional) para o cabeçalho do DANFSe local: caminho de um
+     *                            PNG, conteúdo binário ou data URI base64. Padrão: PNG, até 300 x 300 px
+     *                            (recomendado 192 x 192) e até 60 KB. Fora do padrão, o DANFSe é gerado sem o
+     *                            brasão e a explicação do problema vem em 'avisos'.
+     * @return array{pdf: string, origem: string, avisos: string[]} origem = 'api' (oficial) ou 'local' (gerador da
+     *         biblioteca); avisos = mensagens em português (ex.: brasão recusado por estar fora do padrão)
      * @throws \InvalidArgumentException Se a API estiver indisponível e o XML não for informado
      * @throws \RuntimeException Se o gerador local não puder ser usado (mpdf ausente)
      */
-    public function obterDanfse(string $chaveAcesso, string $xmlNfse, array $dadosAdicionais = [], bool $canceled = false): array
+    public function obterDanfse(string $chaveAcesso, string $xmlNfse, array $dadosAdicionais = [], bool $canceled = false, ?string $brasao = null): array
     {
         try {
-            return ['pdf' => $this->baixarDanfse($chaveAcesso), 'origem' => 'api'];
+            return ['pdf' => $this->baixarDanfse($chaveAcesso), 'origem' => 'api', 'avisos' => []];
         } catch (DanfseIndisponivelException) {
             // segue para o gerador local
         }
@@ -477,17 +482,29 @@ class Tools
             throw new \RuntimeException('Gerador local de DANFSe requer mpdf/mpdf (composer require mpdf/mpdf).');
         }
 
+        $gerador = new DanfseGeneratorNacional();
+        $avisos = [];
+        if ($brasao !== null && $brasao !== '') {
+            try {
+                $gerador->setBrasao($brasao);
+            } catch (ValidationException $e) {
+                // Brasão fora do padrão não impede o DANFSe: sai sem o brasão e o motivo vai em 'avisos'
+                $avisos[] = $e->getMessage();
+            }
+        }
+
         $response = new Response(sucesso: true, xml: $xmlNfse);
-        $pdf = (new DanfseGeneratorNacional())->gerar($response, $dadosAdicionais, $canceled);
+        $pdf = $gerador->gerar($response, $dadosAdicionais, $canceled);
 
         $this->logger->log('ObterDanfse', "DANFSe gerado localmente: {$chaveAcesso}", [
             'chaveAcesso' => $chaveAcesso,
             'origem' => 'local',
             'cancelada' => $canceled,
+            'avisos' => $avisos,
             'tamanhoPdf' => strlen($pdf),
         ]);
 
-        return ['pdf' => $pdf, 'origem' => 'local'];
+        return ['pdf' => $pdf, 'origem' => 'local', 'avisos' => $avisos];
     }
 
     /**

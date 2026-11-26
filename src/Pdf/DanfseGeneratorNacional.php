@@ -5,19 +5,60 @@ declare(strict_types=1);
 namespace NFSeNacional\Pdf;
 
 use NFSeNacional\Common\Response;
+use NFSeNacional\Exception\ValidationException;
 use Mpdf\Mpdf;
 
 /**
  * Gerador de DANFSe (Documento Auxiliar da Nota Fiscal de Serviço Eletrônica) em PDF
  * Usa mPDF para gerar PDF com layout similar ao oficial do Portal Nacional
  *
+ * Cabeçalho (layout de referência do portal nacional):
+ *  - logo "NFS-e Nota Fiscal de Serviço eletrônica": embutido na biblioteca (src/Pdf/imagens/nfse-logo.png),
+ *    carregado automaticamente;
+ *  - QR Code de consulta pública: gerado automaticamente a partir da chave de acesso;
+ *  - brasão da prefeitura: OPCIONAL e fornecido por quem usa a biblioteca (setBrasao() ou a opção
+ *    'brasao' do construtor), pois não consta no XML da NFS-e. Sem brasão, o cabeçalho sai sem ele.
+ *
+ * Padrão exigido para o brasão (ver BRASAO_*):
+ *  - formato: PNG (assinatura PNG válida; JPEG, GIF e demais formatos são recusados);
+ *  - dimensões máximas: 300 x 300 pixels (recomendado 192 x 192, como no painel do portal nacional);
+ *  - tamanho máximo do arquivo: 60 KB (61.440 bytes, o mesmo limite do painel do portal nacional);
+ *  - arquivo íntegro (é decodificado por completo na validação).
+ * Brasão fora do padrão NÃO é carregado e setBrasao() lança ValidationException com mensagem em
+ * português explicando o problema e o padrão esperado.
+ *
  * @package NFSeNacional\Pdf
  */
 class DanfseGeneratorNacional
 {
+    /** Largura máxima do brasão, em pixels. */
+    public const BRASAO_LARGURA_MAXIMA = 300;
+
+    /** Altura máxima do brasão, em pixels. */
+    public const BRASAO_ALTURA_MAXIMA = 300;
+
+    /** Dimensão recomendada do brasão (192 x 192), igual à do painel do portal nacional. */
+    public const BRASAO_DIMENSAO_RECOMENDADA = 192;
+
+    /** Tamanho máximo do arquivo do brasão, em bytes (60 KB). */
+    public const BRASAO_TAMANHO_MAXIMO_BYTES = 61440;
+
+    /** Consulta pública da NFS-e (conteúdo do QR Code). */
+    private const URL_CONSULTA_PUBLICA = 'https://www.nfse.gov.br/ConsultaPublica/?tpc=1&chave=';
+
     private Mpdf $pdf;
 
-    public function __construct()
+    /** Conteúdo binário do brasão (PNG já validado) informado por quem usa a biblioteca. */
+    private ?string $brasao = null;
+
+    /**
+     * @param array{brasao?: string|null} $opcoes
+     *        brasao: caminho de um arquivo PNG, conteúdo binário do PNG ou data URI (data:image/png;base64,...),
+     *        dentro do padrão descrito na documentação da classe.
+     *
+     * @throws ValidationException Se o brasão informado estiver fora do padrão
+     */
+    public function __construct(array $opcoes = [])
     {
         $this->pdf = new Mpdf([
             'mode' => 'utf-8',
@@ -36,6 +77,199 @@ class DanfseGeneratorNacional
         $this->pdf->SetTitle('DANFSe - Documento Auxiliar da NFSe');
         $this->pdf->SetAuthor('PHP NFSe Nacional');
         $this->pdf->SetCreator('PHP NFSe Nacional');
+
+        if (!empty($opcoes['brasao'])) {
+            $this->setBrasao($opcoes['brasao']);
+        }
+    }
+
+    /**
+     * Informa o brasão da prefeitura exibido no cabeçalho (opcional; sem ele o layout segue normalmente).
+     *
+     * Padrão: PNG, até 300 x 300 pixels (recomendado 192 x 192) e até 60 KB, arquivo íntegro.
+     * Brasão fora do padrão não é carregado: lança ValidationException e o brasão anterior é mantido.
+     *
+     * @param string|null $brasao Caminho do arquivo PNG, conteúdo binário do PNG ou data URI base64; null remove o brasão
+     * @throws ValidationException Com a explicação em português do que está errado e do padrão esperado
+     */
+    public function setBrasao(?string $brasao): self
+    {
+        if ($brasao === null || $brasao === '') {
+            $this->brasao = null;
+
+            return $this;
+        }
+
+        $this->brasao = $this->validarBrasao($brasao);
+
+        return $this;
+    }
+
+    /** Texto do padrão exigido para o brasão, usado nas mensagens de erro. */
+    public static function padraoBrasao(): string
+    {
+        return sprintf(
+            'PNG, no máximo %d x %d pixels (recomendado %d x %d) e até %d KB.',
+            self::BRASAO_LARGURA_MAXIMA,
+            self::BRASAO_ALTURA_MAXIMA,
+            self::BRASAO_DIMENSAO_RECOMENDADA,
+            self::BRASAO_DIMENSAO_RECOMENDADA,
+            intdiv(self::BRASAO_TAMANHO_MAXIMO_BYTES, 1024)
+        );
+    }
+
+    /**
+     * Valida o brasão e devolve o conteúdo binário do PNG.
+     *
+     * @throws ValidationException
+     */
+    private function validarBrasao(string $origem): string
+    {
+        $padrao = ' Padrão esperado: ' . self::padraoBrasao();
+        $bytes = $this->lerBrasao($origem, $padrao);
+
+        $limite = self::BRASAO_TAMANHO_MAXIMO_BYTES;
+        if (strlen($bytes) > $limite) {
+            throw new ValidationException(sprintf(
+                'Brasão inválido: o arquivo tem %s KB e excede o limite de %d KB.%s',
+                number_format(strlen($bytes) / 1024, 1, ',', ''),
+                intdiv($limite, 1024),
+                $padrao
+            ));
+        }
+
+        if (!str_starts_with($bytes, "\x89PNG\r\n\x1a\n")) {
+            throw new ValidationException(
+                'Brasão inválido: o formato não é PNG (recebido: ' . $this->descreverFormato($bytes) . ').' . $padrao
+            );
+        }
+
+        $info = @getimagesizefromstring($bytes);
+        if ($info === false || @imagecreatefromstring($bytes) === false) {
+            throw new ValidationException('Brasão inválido: o arquivo PNG está corrompido ou incompleto e não pôde ser lido.' . $padrao);
+        }
+
+        [$largura, $altura] = $info;
+        if ($largura > self::BRASAO_LARGURA_MAXIMA || $altura > self::BRASAO_ALTURA_MAXIMA) {
+            throw new ValidationException(sprintf(
+                'Brasão inválido: a imagem tem %d x %d pixels e excede o máximo de %d x %d.%s',
+                $largura,
+                $altura,
+                self::BRASAO_LARGURA_MAXIMA,
+                self::BRASAO_ALTURA_MAXIMA,
+                $padrao
+            ));
+        }
+
+        return $bytes;
+    }
+
+    /**
+     * Resolve a origem do brasão (data URI, caminho de arquivo ou conteúdo binário) para bytes.
+     *
+     * @throws ValidationException
+     */
+    private function lerBrasao(string $origem, string $padrao): string
+    {
+        if (str_starts_with($origem, 'data:')) {
+            if (!preg_match('#^data:([\w/+.-]*)(;base64)?,(.*)$#s', $origem, $partes) || $partes[2] === '') {
+                throw new ValidationException('Brasão inválido: o data URI deve estar em base64 (data:image/png;base64,...).' . $padrao);
+            }
+            if (strtolower($partes[1]) !== 'image/png') {
+                throw new ValidationException(
+                    'Brasão inválido: o formato não é PNG (data URI informado como "' . $partes[1] . '").' . $padrao
+                );
+            }
+            $bytes = base64_decode($partes[3], true);
+            if ($bytes === false || $bytes === '') {
+                throw new ValidationException('Brasão inválido: o conteúdo base64 do data URI está corrompido.' . $padrao);
+            }
+
+            return $bytes;
+        }
+
+        // Texto curto, sem bytes de controle: é tratado como caminho de arquivo
+        if (strlen($origem) <= 1024 && !preg_match('/[\x00-\x08\x0E-\x1F]/', $origem)) {
+            if (!is_file($origem) || !is_readable($origem)) {
+                throw new ValidationException('Brasão inválido: arquivo não encontrado ou sem permissão de leitura (' . $origem . ').' . $padrao);
+            }
+            $bytes = file_get_contents($origem);
+            if ($bytes === false || $bytes === '') {
+                throw new ValidationException('Brasão inválido: o arquivo está vazio ou não pôde ser lido.' . $padrao);
+            }
+
+            return $bytes;
+        }
+
+        return $origem;
+    }
+
+    private function descreverFormato(string $bytes): string
+    {
+        return match (true) {
+            str_starts_with($bytes, "\xFF\xD8\xFF") => 'JPEG',
+            str_starts_with($bytes, 'GIF8') => 'GIF',
+            str_starts_with($bytes, 'BM') => 'BMP',
+            str_starts_with($bytes, 'RIFF') && substr($bytes, 8, 4) === 'WEBP' => 'WEBP',
+            default => 'formato desconhecido',
+        };
+    }
+
+    /** Data URI de uma imagem embutida em src/Pdf/imagens/; vazio se o arquivo não existir. */
+    private function imagemEmbutida(string $nome): string
+    {
+        $arquivo = __DIR__ . '/imagens/' . $nome;
+        $conteudo = is_file($arquivo) ? file_get_contents($arquivo) : false;
+
+        return $conteudo === false ? '' : 'data:image/png;base64,' . base64_encode($conteudo);
+    }
+
+    /** QR Code (PNG em data URI) da consulta pública da NFS-e, gerado a partir da chave de acesso. */
+    private function qrCodeConsulta(string $chaveAcesso): string
+    {
+        if (!preg_match('/^[0-9]{50}$/', $chaveAcesso) || !class_exists(\TCPDF2DBarcode::class)) {
+            return '';
+        }
+
+        try {
+            // O TCPDF sorteia (rand) quais máscaras avaliar; fixamos a semente pela chave para que o mesmo
+            // QR seja sempre gerado (PDF reprodutível) e depois devolvemos o gerador a uma semente aleatória.
+            mt_srand(crc32($chaveAcesso));
+            try {
+                $codigo = (new \TCPDF2DBarcode(self::URL_CONSULTA_PUBLICA . $chaveAcesso, 'QRCODE,M'))->getBarcodeArray();
+            } finally {
+                mt_srand();
+            }
+            $modulos = (int) ($codigo['num_rows'] ?? 0);
+            if ($modulos === 0 || empty($codigo['bcode'])) {
+                return '';
+            }
+
+            // PNG opaco (fundo branco, 4 px por módulo, margem de 2 módulos), sem canal alfa
+            $escala = 4;
+            $margem = 2 * $escala;
+            $lado = $modulos * $escala + 2 * $margem;
+            $imagem = imagecreatetruecolor($lado, $lado);
+            imagefill($imagem, 0, 0, imagecolorallocate($imagem, 255, 255, 255));
+            $preto = imagecolorallocate($imagem, 0, 0, 0);
+            foreach ($codigo['bcode'] as $linha => $colunas) {
+                foreach ($colunas as $coluna => $valor) {
+                    if ($valor == 1) {
+                        $x = $margem + $coluna * $escala;
+                        $y = $margem + $linha * $escala;
+                        imagefilledrectangle($imagem, $x, $y, $x + $escala - 1, $y + $escala - 1, $preto);
+                    }
+                }
+            }
+
+            ob_start();
+            imagepng($imagem, null, 9);
+            $png = (string) ob_get_clean();
+        } catch (\Throwable) {
+            return '';
+        }
+
+        return $png !== '' ? 'data:image/png;base64,' . base64_encode($png) : '';
     }
 
     /**
@@ -134,6 +368,10 @@ class DanfseGeneratorNacional
                 font-size: 9pt;
                 margin-bottom: 3px;
             }
+            table.cab td {
+                border: 0;
+                padding: 1px 2px;
+            }
             .section-title {
                 background-color: #d0d0d0;
                 padding: 2px 4px;
@@ -217,10 +455,48 @@ class DanfseGeneratorNacional
     {
         $chaveAcesso = $dados['chaveAcesso'] ?? $dados['codigoVerificacao'] ?? '---';
 
-        $html = '<div class="header">';
-        $html .= 'Nota Fiscal de Serviço eletrônica DANFSe v1.0<br>';
-        $html .= 'Documento Auxiliar da NFS-e';
-        $html .= '</div>';
+        // Layout de referência do portal nacional: logo | título | brasão + prefeitura | QR Code
+        $logo = $this->imagemEmbutida('nfse-logo.png');
+        $qrCode = $this->qrCodeConsulta((string) ($dados['chaveAcesso'] ?? ''));
+        $municipio = trim((string) ($dados['municipioEmissor'] ?? ''));
+
+        $html = '<table class="cab" style="width: 100%; border: 1px solid #000; margin-bottom: 0;"><tr>';
+
+        $html .= '<td style="width: 27%; vertical-align: middle; padding: 3px 4px;">';
+        if ($logo !== '') {
+            $html .= '<img src="' . $logo . '" style="height: 10mm;" />';
+        }
+        $html .= '</td>';
+
+        $html .= '<td style="width: 31%; text-align: center; vertical-align: middle; font-weight: bold; font-size: 9pt;">';
+        $html .= 'DANFSe v1.0<br>Documento Auxiliar da NFS-e';
+        $html .= '</td>';
+
+        $html .= '<td style="width: 30%; vertical-align: middle; padding: 3px 4px;">';
+        if ($this->brasao !== null || $municipio !== '') {
+            $html .= '<table class="cab" style="width: 100%;"><tr>';
+            if ($this->brasao !== null) {
+                $html .= '<td style="width: 13mm; vertical-align: middle;">';
+                $html .= '<img src="data:image/png;base64,' . base64_encode($this->brasao) . '" style="height: 12mm;" />';
+                $html .= '</td>';
+            }
+            if ($municipio !== '') {
+                $html .= '<td style="vertical-align: middle; font-size: 7pt; font-weight: bold;">';
+                $html .= 'Prefeitura Municipal de ' . htmlspecialchars($municipio, ENT_QUOTES, 'UTF-8');
+                $html .= '</td>';
+            }
+            $html .= '</tr></table>';
+        }
+        $html .= '</td>';
+
+        $html .= '<td style="width: 12%; text-align: center; vertical-align: middle; padding: 2px;">';
+        if ($qrCode !== '') {
+            $html .= '<img src="' . $qrCode . '" style="width: 18mm; height: 18mm;" /><br>';
+            $html .= '<span style="font-size: 4.5pt;">A autenticidade desta NFS-e pode ser verificada pela leitura deste código QR ou pela consulta da chave de acesso no portal nacional da NFS-e</span>';
+        }
+        $html .= '</td>';
+
+        $html .= '</tr></table>';
 
         $html .= '<div class="chave-acesso">';
         $html .= 'Chave de Acesso da NFS-e: ' . $chaveAcesso;
@@ -525,6 +801,10 @@ class DanfseGeneratorNacional
             // Chave de acesso (Id da infNFSe)
             $idNodes = $xpath->query('//sped:infNFSe/@Id | //infNFSe/@Id');
             $dados['chaveAcesso'] = $idNodes->length > 0 ? str_replace('NFS', '', $idNodes->item(0)->nodeValue) : '';
+
+            // Município emissor (nome), usado no cabeçalho "Prefeitura Municipal de ..."
+            $xLocEmiNodes = $xpath->query('//sped:infNFSe/sped:xLocEmi | //infNFSe/xLocEmi');
+            $dados['municipioEmissor'] = $xLocEmiNodes->length > 0 ? trim($xLocEmiNodes->item(0)->nodeValue) : '';
 
             // Número da NFS-e
             $numeroNodes = $xpath->query('//sped:nNFSe | //nNFSe');
