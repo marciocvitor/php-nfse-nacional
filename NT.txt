@@ -1,2 +1,2 @@
-NT inicial - Layout 1.00 - Padrão ABRASF Portal Nacional NFSe
-
+NT 009 v1.01 - Layout 1.01 - NFS-e Nacional (Reforma Tributária do Consumo)
+Schemas oficiais: pacote "Esquemas XSD - Produção Restrita" publicado em 24/11/2026 (esquemas-xsd-producao-restrita-20261124.zip)

@@ -17,21 +17,37 @@ Quando uma nova Nota Técnica for publicada pelo Portal Nacional:
 
 ## Histórico de Notas Técnicas
 
-### NT Inicial - Layout 1.00
-**Data:** Implementação inicial  
+### NT 009 v1.01 - Layout 1.01 (Reforma Tributária do Consumo)
+**Data:** 2026-11-26 (schemas oficiais de produção restrita publicados em 24/11/2026)  
+**Versão do Layout:** 1.01  
+**Nota Técnica:** NT 009 v1.01 - NFS-e Nacional  
+**Descrição:** Adequação ao leiaute oficial da NT 009. Emissão individual de DPS via API REST. Remoção total do padrão ABRASF e do envio em lote.  
+**Schemas:**
+- `DPS_v1.01.xsd` (raiz DPS, namespace `http://www.sped.fazenda.gov.br/nfse`)
+- `NFSe_v1.01.xsd`
+- `pedRegEvento_v1.01.xsd` / `evento_v1.01.xsd` / `tiposEventos_v1.01.xsd` (eventos, ex.: cancelamento `e101101`)
+- `tiposComplexos_v1.01.xsd`, `tiposSimples_v1.01.xsd`, `CNC_v1.00.xsd`, `tiposCnc_v1.00.xsd`, `xmldsig-core-schema.xsd`
+
+**Principais mudanças de leiaute:**
+- CNPJ do prestador/tomador aceita formato alfanumérico (`[0-9A-Z]{14}`)
+- Série numérica (`TSSerieDPS`)
+- Código de tributação nacional `cTribNac` (6 dígitos) obrigatório
+- Regime tributário do prestador (`opSimpNac`, `regApTribSN`, `regEspTrib`)
+- Cancelamento com `cMotivo` (1 = Erro na emissão, 2 = Serviço não prestado, 9 = Outros)
+
+**Breaking changes:** ver `CHANGELOG.md` (versão 2.0.0).
+
+### NT Inicial - Layout 1.00 (descontinuada)
 **Versão do Layout:** 1.00  
 **Nota Técnica:** NT inicial - Layout 1.00 - Padrão ABRASF Portal Nacional NFSe  
-**Descrição:** Implementação inicial da biblioteca seguindo o padrão ABRASF do Portal Nacional de NFSe.  
-**Schemas:** 
-- `EnviarDpsEnvio.xsd` (versão 1.00)
-- `EnviarLoteRpsEnvio.xsd` (versão 1.00)
+**Descrição:** Implementação inicial da biblioteca seguindo o padrão ABRASF (lote RPS/EnviarLoteRpsEnvio). Removida na versão 2.0.0, pois o Portal Nacional passou a usar o leiaute NT 009.  
+**Schemas:** `EnviarDpsEnvio.xsd` e `EnviarLoteRpsEnvio.xsd` (1.00) — removidos.
 
 ---
 
 ## Referências
 
 - [Portal Nacional de NFSe](https://www.gov.br/nfse/pt-br)
-- [ABRASF - Associação Brasileira das Secretarias de Finanças das Capitais](http://www.abrasf.org.br)
 - [Documentação Técnica NFSe Nacional](https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica)
 
 ---

@@ -19,7 +19,6 @@ Descreva o que você já tentou fazer para resolver/responder sua dúvida.
 - [ ] README.md
 - [ ] QUICK-START.md
 - [ ] GUIA-APLICACAO.md
-- [ ] MANUAL-LOTE.md
 - [ ] Exemplos em `examples/`
 - [ ] Outros: ___________
 

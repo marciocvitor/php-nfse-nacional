@@ -35,16 +35,21 @@ try {
     // 2. CRIAR DPS
     $dps = new Make();
     
+    // Série deve ser numérica (1 a 4 dígitos) conforme TSSerieDPS
+    $dps->setCLocEmi('3550308'); // IBGE do município de emissão (obrigatório)
+    
     $dps->setIdentificacao([
         'numero' => '123',
-        'serie' => 'UNICA',
-        'tipo' => 1
+        'serie' => '1'
     ]);
     
     $dps->setPrestador([
-        'cnpj' => '12345678901234',
+        'cnpj' => '12345678000195', // CNPJ numérico ou alfanumérico (NT 009)
         'im' => '123456',
-        'razaoSocial' => 'Minha Empresa LTDA'
+        'razaoSocial' => 'Minha Empresa LTDA',
+        'opSimpNac' => 3, // 1=Não optante, 2=MEI, 3=ME/EPP (confirmar no Anexo oficial)
+        'regEspTrib' => 0, // 0 = nenhum
+        'regApTribSN' => 1
     ]);
     
     $dps->setTomador([
@@ -54,13 +59,12 @@ try {
     ]);
     
     $dps->setServico([
-        'itemListaServico' => '01.01',
+        'cTribNac' => '010701', // Código de tributação nacional (6 dígitos)
         'discriminacao' => 'Serviço de desenvolvimento de software',
-        'codigoMunicipio' => '3550308',
         'valorServicos' => 1000.00,
-        'valorIss' => 50.00,
-        'aliquota' => 0.0500
+        'issRetido' => 2 // 1=Sim, 2=Não
     ]);
+    $dps->setPTotTribSN('10.51'); // Opcional: percentual de tributos do Simples Nacional
     
     // 3. GERAR XML
     $xml = $dps->getXML();

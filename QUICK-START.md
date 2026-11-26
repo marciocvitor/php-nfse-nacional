@@ -70,16 +70,15 @@ $config = Config::fromArray([
 $tools = new Tools($config);
 
 $dps = (new Make())
-    ->setIdentificacao(['numero' => '123', 'serie' => 'A1', 'tipo' => 1])
-    ->setPrestador(['cnpj' => '12345678901234', 'im' => '123456', 'razaoSocial' => 'Minha Empresa LTDA'])
+    ->setCLocEmi('3550308')
+    ->setIdentificacao(['numero' => '123', 'serie' => '1'])
+    ->setPrestador(['cnpj' => '12345678000195', 'im' => '123456', 'razaoSocial' => 'Minha Empresa LTDA', 'opSimpNac' => 3, 'regEspTrib' => 0])
     ->setTomador(['cpfCnpj' => '98765432100', 'razaoSocial' => 'Cliente Teste', 'email' => 'cliente@teste.com'])
     ->setServico([
-        'itemListaServico' => '01.01',
+        'cTribNac' => '010701',
         'discriminacao' => 'Serviço de desenvolvimento',
-        'codigoMunicipio' => '3550308',
         'valorServicos' => 1000.00,
-        'valorIss' => 50.00,
-        'aliquota' => 0.0500
+        'issRetido' => 2
     ]);
 
 $response = $tools->enviarDps($dps->getXML());

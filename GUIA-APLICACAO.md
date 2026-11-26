@@ -203,8 +203,7 @@ class EmissaoNfse
             $dps = (new Make())
                 ->setIdentificacao([
                     'numero' => $dados['numero'],
-                    'serie' => $dados['serie'] ?? 'UNICA',
-                    'tipo' => $dados['tipo'] ?? 1
+                    'serie' => $dados['serie'] ?? '1'
                 ])
                 ->setPrestador([
                     'cnpj' => $dados['prestador']['cnpj'],
@@ -217,12 +216,9 @@ class EmissaoNfse
                     'email' => $dados['tomador']['email'] ?? ''
                 ])
                 ->setServico([
-                    'itemListaServico' => $dados['servico']['itemListaServico'],
+                    'cTribNac' => $dados['servico']['cTribNac'],
                     'discriminacao' => $dados['servico']['discriminacao'],
-                    'codigoMunicipio' => $dados['servico']['codigoMunicipio'],
                     'valorServicos' => $dados['servico']['valorServicos'],
-                    'valorIss' => $dados['servico']['valorIss'],
-                    'aliquota' => $dados['servico']['aliquota'],
                     'issRetido' => $dados['servico']['issRetido'] ?? 2
                 ]);
             
@@ -260,12 +256,10 @@ $resultado = $emissor->emitirNfse([
         'email' => 'cliente@teste.com'
     ],
     'servico' => [
-        'itemListaServico' => '01.01',
+        'cTribNac' => '010701',
         'discriminacao' => 'Serviço de desenvolvimento',
-        'codigoMunicipio' => '3550308',
         'valorServicos' => 1000.00,
-        'valorIss' => 50.00,
-        'aliquota' => 0.0500
+        'issRetido' => 2
     ]
 ]);
 
@@ -308,9 +302,8 @@ Para mais informações, consulte:
 
 ## Próximos Passos
 
-- Veja exemplos completos em: `examples/exemplo_basico.php` e `examples/exemplo_lote.php`
+- Veja exemplos completos em: `examples/exemplo_basico.php` e `examples/exemplo_danfse.php`
 - Leia a documentação completa: [README.md](README.md)
-- Consulte o manual de lote: [MANUAL-LOTE.md](MANUAL-LOTE.md)
 
 ---
 

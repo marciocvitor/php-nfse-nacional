@@ -7,9 +7,36 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
-## [2.0.0] - 2025-01-XX
+## [2.0.0] - 2026-11-26
 
 ### Alterado (Breaking Changes)
+
+- **Leiaute NT 009 v1.01** - Schemas XSD substituídos pelos oficiais de produção restrita (publicados em 24/11/2026). `DPS_v1.01.xsd` é o schema de validação da DPS.
+- **Envio de lote (ABRASF) removido** - Métodos `enviarLoteDps()`, `consultarLote()`, `consultarNfse()`, `gerarXmlLote()`, `gerarXmlConsultaLote()` e `gerarXmlConsultaNfse()` foram removidos. Use `enviarDps()` (uma DPS por requisição).
+- **Padrão ABRASF removido** - Schemas `EnviarDpsEnvio.xsd` e `EnviarLoteRpsEnvio.xsd` excluídos.
+- **Classe `Make`**:
+  - Parâmetro `tipo` removido de `setIdentificacao()`; `serie` agora é numérica (ex.: `'1'`).
+  - `setServico()`: `itemListaServico` substituído por `cTribNac` (obrigatório, 6 dígitos); `valorIss`/`aliquota`/`natOp`/`incentivadorCultural` removidos (cálculo de tributos fica a cargo do leiaute NT 009).
+  - `setCLocEmi()` (código IBGE do município emissor) obrigatório.
+  - `setPrestador()`: exige `opSimpNac`, `regEspTrib` (e `regApTribSN` quando optante pelo Simples Nacional).
+  - Métodos `getDPSXML()` e `getXML()` geram o XML da DPS (sem wrapper `infNFSe`).
+- **CNPJ alfanumérico** aceito em prestador e tomador (`[0-9A-Z]{14}`), conforme NT 009.
+- **`cancelarNfse()`** agora recebe o código do motivo: `cancelarNfse(string $chaveAcesso, string $motivo, int $cMotivo = 2)`. Endpoint: `POST /nfse/{chaveAcesso}/eventos`.
+- **Validação de negócio** (`DpsValidator`): erros agregados em `ValidationException` com mensagens em lista.
+- Extensão `ext-soap` não é mais requerida.
+
+### Corrigido
+
+- Geração de DPS com namespace `http://www.sped.fazenda.gov.br/nfse` sem `xmlns=""` indevido.
+- ID da DPS (45 caracteres: `DPS` + código IBGE + tipo de inscrição + CNPJ + série + número) e da assinatura conforme XSD.
+- Evento de cancelamento (`pedRegEvento` / `e101101`) gerado conforme o schema oficial.
+
+### Adicionado (NT 009)
+
+- Testes automatizados com PHPUnit (`composer test`) incluindo validação contra os schemas oficiais.
+- `phpunit.xml.dist`.
+
+### Migração REST (versão em desenvolvimento)
 
 - **Migração completa de SOAP/WSDL para REST API** - O Portal Nacional usa APIs REST, não SOAP
 - Removida configuração de `wsdl` - URLs são automáticas baseadas no ambiente

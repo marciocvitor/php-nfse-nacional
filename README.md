@@ -8,7 +8,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/marciocvitor/php-nfse-nacional)](https://github.com/marciocvitor/php-nfse-nacional/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/marciocvitor/php-nfse-nacional)](https://github.com/marciocvitor/php-nfse-nacional/network)
 
-Biblioteca PHP open source para emissão de **Nota Fiscal de Serviço Eletrônica (NFSe)** no **Portal Nacional** seguindo o padrão **ABRASF**, com validação de schemas e assinatura XML.
+Biblioteca PHP open source para emissão de **Nota Fiscal de Serviço Eletrônica (NFSe)** no **Portal Nacional**, conforme a **NT 009 v1.01** (Reforma Tributária do Consumo), com validação contra os schemas oficiais e assinatura XML.
 
 Este pacote é aderente com os **PSR-1**, **PSR-2** e **PSR-4**. Se você observar negligências de conformidade, por favor envie um patch via pull request.
 
@@ -16,11 +16,14 @@ Este pacote é aderente com os **PSR-1**, **PSR-2** e **PSR-4**. Se você observ
 
 ## 🚀 Atualizações Recentes
 
-* Layout 1.00 - Portal Nacional NFSe
-* API REST
-* Suporte a envio em lote (até 50 DPS)
+* Layout 1.01 - NT 009 v1.01 (schemas oficiais de produção restrita de 24/11/2026)
+* API REST (envio de DPS individual)
+* CNPJ alfanumérico
 * Geração de DANFSe em PDF
 * Sistema de log com versão e NT
+
+> **Atenção:** esta versão é **2.0.0**. Ela remove o envio em lote ABRASF e a consulta SOAP/ABRASF.
+> A emissão em produção pela Sefin Nacional passa ao leiaute NT 009 em **01/12/2026**.
 
 ---
 
@@ -91,15 +94,17 @@ $tools = new Tools($config);
 
 // Criar DPS
 $dps = new Make();
+$dps->setCLocEmi('3550308'); // IBGE do município de emissão (obrigatório)
 $dps->setIdentificacao([
     'numero' => '123',
-    'serie' => 'A1',
-    'tipo' => 1
+    'serie' => '1'            // numérica, 1 a 4 dígitos
 ]);
 $dps->setPrestador([
-    'cnpj' => '12345678901234',
+    'cnpj' => '12345678000195', // numérico ou alfanumérico (NT 009)
     'im' => '123456',
-    'razaoSocial' => 'Minha Empresa LTDA'
+    'razaoSocial' => 'Minha Empresa LTDA',
+    'opSimpNac' => 3,           // 1=Não optante, 2=MEI, 3=ME/EPP (confirmar no Anexo oficial)
+    'regEspTrib' => 0
 ]);
 $dps->setTomador([
     'cpfCnpj' => '98765432100',
@@ -107,16 +112,13 @@ $dps->setTomador([
     'email' => 'cliente@teste.com'
 ]);
 $dps->setServico([
-    'itemListaServico' => '01.01',
+    'cTribNac' => '010701',     // código de tributação nacional (6 dígitos)
     'discriminacao' => 'Serviço de desenvolvimento',
-    'codigoMunicipio' => '3550308',
     'valorServicos' => 1000.00,
-    'valorIss' => 50.00,
-    'aliquota' => 0.0500,
     'issRetido' => 2
 ]);
 
-// Gerar XML e enviar
+// Gerar XML, assinar e enviar
 $xml = $dps->getXML();
 $response = $tools->enviarDps($xml);
 
@@ -125,24 +127,7 @@ if ($response->sucesso) {
 }
 ```
 
----
-
-### Envio em Lote (Assíncrono)
-
-```php
-// Criar múltiplas DPS (cada Make gera seu XML já pronto para validação)
-$listaDps = [$dps1->getXML(), $dps2->getXML(), $dps3->getXML()];
-
-// Enviar lote (até 50 DPS)
-$response = $tools->enviarLoteDps($listaDps, 'LOTE001');
-$protocolo = $response->dados['parsed']['Protocolo'] ?? null;
-
-// Consultar resultado
-$resultado = $tools->consultarLote($protocolo);
-echo "NFS-e geradas: " . count($resultado->dados['parsed']['ListaNfse'] ?? []) . PHP_EOL;
-```
-
-**Documentação completa:** [MANUAL-LOTE.md](MANUAL-LOTE.md)
+> O envio é sempre uma DPS por requisição (`POST /nfse`). Não há mais envio em lote.
 
 ---
 
@@ -180,9 +165,6 @@ $config = Config::fromArray([
 
 **Endpoints disponíveis:**
 - `POST /SefinNacional/nfse` - Enviar DPS individual (síncrono)
-- `POST /SefinNacional/lote` - Enviar lote de DPS (assíncrono)
-- `POST /SefinNacional/lote/consulta` - Consultar resultado do lote
-- `POST /SefinNacional/nfse/consulta` - Consultar NFSe individual
 - `GET /SefinNacional/dps/{idDps}` - Consultar DPS por ID
 - `GET /SefinNacional/nfse/{chaveAcesso}` - Consultar NFSe por chave de acesso
 - `GET /SefinNacional/danfse/{chaveAcesso}` - Baixar DANFSe (PDF)
@@ -210,7 +192,7 @@ php-nfse-nacional/
 │   ├── Make/             # Geração de XML DPS/RPS
 │   ├── Security/         # Certificados e assinatura XML
 │   ├── Validator/        # Regras de negócio + schemas
-│   ├── Schemas/          # XSDs oficiais ABRASF
+│   ├── Schemas/          # XSDs oficiais NT 009 v1.01
 │   └── Common/           # Classes comuns (Response)
 └── examples/
     └── exemplo_basico.php # Exemplo de uso
@@ -223,7 +205,6 @@ php-nfse-nacional/
 - **[GUIA-APLICACAO.md](GUIA-APLICACAO.md)** - ⭐ **Como aplicar a biblioteca no seu projeto** (3 opções)
 - **[QUICK-START.md](QUICK-START.md)** - Início rápido em 3 passos
 - **[INSTALL.md](INSTALL.md)** - Guia completo de instalação e configuração
-- **[MANUAL-LOTE.md](MANUAL-LOTE.md)** - Processo completo de envio em lote e tratamentos
 - **[CHANGELOG.md](CHANGELOG.md)** - Histórico de versões e mudanças da biblioteca
 - **[NOTAS-TECNICAS.md](NOTAS-TECNICAS.md)** - Histórico de Notas Técnicas (NTs) implementadas
 - **[examples/](examples/)** - Exemplos práticos de uso
@@ -233,11 +214,8 @@ php-nfse-nacional/
 ## Conformidade e Funcionalidades
 
 - [x] Assinatura digital XML (XMLDSig SHA256/RSA) com certificados A1
-- [x] Validação pré-envio contra schemas oficiais ABRASF
+- [x] Validação pré-envio contra os schemas oficiais NT 009 v1.01 (`DPS_v1.01.xsd`)
 - [x] Envio de DPS individual (síncrono) via REST API
-- [x] Envio de lote (até 50 DPS) via REST API (assíncrono)
-- [x] Consulta de lote por protocolo
-- [x] Consulta de NFSe (`ConsultarNfse`)
 - [x] Consulta de DPS por ID (`consultarDps`)
 - [x] Consulta de NFSe por chave de acesso (`consultarNfsePorChave`)
 - [x] Cancelamento (`CancelarNfse`)
@@ -256,8 +234,8 @@ A biblioteca possui sistema de log automático que registra todas as operações
 
 ### Arquivos de Controle
 
-- **`VERSION.txt`**: Versão do layout atual (ex: `1.00`)
-- **`NT.txt`**: Nota Técnica aplicada (ex: `NT inicial - Layout 1.00`)
+- **`VERSION.txt`**: Versão do layout atual (`1.01`)
+- **`NT.txt`**: Nota Técnica aplicada (`NT 009 v1.01 - Layout 1.01`)
 
 ### Arquivo de Log
 
