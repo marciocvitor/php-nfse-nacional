@@ -48,35 +48,66 @@ class CancelamentoXmlTest extends TestCase
     }
 
     /**
-     * Estrutura do pedRegEvento validada contra o XSD oficial.
-     *
-     * O atributo Id é trocado por um valor que cumpre o padrão TSIdPedRegEvt (59 caracteres),
-     * porque a documentação do próprio schema (PRE + chave + tipo + nPedRegEvento = 62)
-     * não bate com o maxLength/pattern do XSD. Essa divergência precisa ser confirmada
-     * em homologação. Aqui testamos apenas a estrutura dos demais elementos.
+     * O pedRegEvento gerado (inclusive o Id) é válido contra o XSD oficial, sem nenhum ajuste manual.
      */
     public function testEstruturaDoCancelamentoValidaContraSchemaOficial(): void
     {
         $xml = $this->gerar()['xml'];
 
-        $dom = new \DOMDocument();
-        $dom->loadXML($xml);
-        $inf = $dom->getElementsByTagNameNS('http://www.sped.fazenda.gov.br/nfse', 'infPedReg')->item(0);
-        // PRE(3) + dígitos(8) + tipo(1) + inscrição(14) + dígitos(33) = 59
-        $inf->setAttribute('Id', 'PRE' . '12345678' . '1' . '11222333000181' . str_repeat('0', 33));
-
         $schemas = new SchemaValidator(dirname(__DIR__, 2) . '/src/Schemas');
-        $schemas->validate($dom->saveXML(), SchemaType::PEDIDO_REGISTRO_EVENTO);
+        $schemas->validate($xml, SchemaType::PEDIDO_REGISTRO_EVENTO);
         $this->addToAssertionCount(1);
     }
 
-    public function testIdDoEventoSegueComposicaoDaDocumentacao(): void
+    // BUG 2 — Id com 62 caracteres era rejeitado pela SEFIN (E1235, TSIdPedRegEvt)
+
+    public function testIdDoEventoTemCinquentaENoveCaracteres(): void
+    {
+        $id = $this->gerar()['idEvento'];
+
+        $this->assertSame(59, strlen($id));
+        $this->assertSame('PRE' . self::CHAVE . '101101', $id);
+    }
+
+    public function testIdDoEventoNaoTemSufixoDeNPedRegEvento(): void
+    {
+        $id = $this->gerar()['idEvento'];
+
+        $this->assertStringEndsWith('101101', $id);
+        $this->assertStringEndsNotWith('101101001', $id);
+    }
+
+    public function testIdDoEventoSegueOPadraoDoXsd(): void
+    {
+        $id = $this->gerar()['idEvento'];
+
+        // TSIdPedRegEvt: PRE[0-9]{8}(1[0-9]{14}|2[0-9A-Z]{14})[0-9]{33}
+        $this->assertMatchesRegularExpression('/^PRE[0-9]{8}(1[0-9]{14}|2[0-9A-Z]{14})[0-9]{33}$/', $id);
+    }
+
+    public function testIdDoXmlGeradoEOMesmoUsadoParaAssinar(): void
     {
         $resultado = $this->gerar();
 
-        // Documentação: "PRE" + chave(50) + tipo do evento(6) + nPedRegEvento(3)
-        $this->assertSame('PRE' . self::CHAVE . '101101' . '001', $resultado['idEvento']);
-        $this->assertSame(62, strlen($resultado['idEvento']));
+        $dom = new \DOMDocument();
+        $dom->loadXML($resultado['xml']);
+        $inf = $dom->getElementsByTagNameNS('http://www.sped.fazenda.gov.br/nfse', 'infPedReg')->item(0);
+
+        $this->assertSame($resultado['idEvento'], $inf->getAttribute('Id'));
+    }
+
+    public function testSchemaRejeitaIdAntigoDeSessentaEDoisCaracteres(): void
+    {
+        // Documenta a causa do E1235: o Id antigo (com nPedRegEvento) não passa no XSD
+        $dom = new \DOMDocument();
+        $dom->loadXML($this->gerar()['xml']);
+        $inf = $dom->getElementsByTagNameNS('http://www.sped.fazenda.gov.br/nfse', 'infPedReg')->item(0);
+        $inf->setAttribute('Id', 'PRE' . self::CHAVE . '101101' . '001');
+
+        $schemas = new SchemaValidator(dirname(__DIR__, 2) . '/src/Schemas');
+
+        $this->expectException(\Throwable::class);
+        $schemas->validate($dom->saveXML(), SchemaType::PEDIDO_REGISTRO_EVENTO);
     }
 
     public function testCodigoDeMotivoInvalidoLancaErro(): void

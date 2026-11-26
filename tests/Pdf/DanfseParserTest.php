@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NFSeNacional\Tests\Pdf;
 
 use NFSeNacional\Pdf\DanfseGeneratorNacional;
+use NFSeNacional\Tests\Tools\DanfseXmlFixture;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -127,6 +128,35 @@ XML;
         $this->assertStringContainsString('5,00%', $html);
         $this->assertStringContainsString('18,15', $html);
         $this->assertMatchesRegularExpression('/<td class="text-center">Sim<\/td>/', $html);
+    }
+
+    // Regressão: no XML autorizado real a DPS está aninhada em infNFSe e os valores da DPS
+    // (vServ, trib) não eram lidos, deixando valor do serviço e ISSQN zerados no DANFSe.
+
+    public function testLeValoresDaDpsAninhadaEmInfNfse(): void
+    {
+        $dados = $this->extrair(DanfseXmlFixture::NFSE);
+
+        $this->assertSame(405.8, $dados['vServ']);
+        $this->assertSame(405.8, $dados['valorServico']);
+        $this->assertSame(405.8, $dados['valorTotal']);
+    }
+
+    public function testLeTributacaoMunicipalDaDpsAninhadaEmInfNfse(): void
+    {
+        $tribMun = $this->extrair(DanfseXmlFixture::NFSE)['tributacao']['tribMun'];
+
+        $this->assertSame(1, $tribMun['issRetido']);
+        $this->assertSame(5.0, $tribMun['aliquota']);
+        $this->assertSame(405.8, $tribMun['bcIssqn']);
+        $this->assertSame(20.29, $tribMun['issApurado']);
+    }
+
+    public function testImDoPrestadorVemDaDpsAninhadaQuandoEmitNaoTem(): void
+    {
+        $dados = $this->extrair(DanfseXmlFixture::NFSE);
+
+        $this->assertSame('12345', $dados['prestador']['im']);
     }
 
     public function testRetencaoIssqnNaoQuandoNaoRetido(): void

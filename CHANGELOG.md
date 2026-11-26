@@ -7,6 +7,28 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [2.0.2] - 2026-11-26
+
+Correções confirmadas em homologação (SEFIN produção restrita, `tpAmb = 2`).
+
+### Corrigido
+
+- **DPS com `tpEmit = 1`** - `Make` não emite mais `xNome` nem o grupo `end` do prestador, que a SEFIN rejeitava (E0121 e E0128). Telefone e e-mail continuam sendo enviados. A razão social deixou de ser exigida em `setPrestador()`; ela continua obrigatória em `getDPSXML()` quando `tpEmit` é diferente de 1, caso em que `xNome` e o endereço são emitidos normalmente.
+- **Cancelamento** - o `Id` do `pedRegEvento` agora é `PRE` + chave + `101101` (59 caracteres, conforme `TSIdPedRegEvt`). Antes o sufixo `nPedRegEvento` levava o `Id` a 62 caracteres e a SEFIN respondia E1235.
+- **Alíquota zero** - `pAliq` não é mais emitido quando a alíquota informada é zero (`0`, `'0'`, `'0.00'`, `'0.0000'`), evitando o erro E0625.
+- **DANFSe local** - `DanfseGeneratorNacional` lia vazios os valores da DPS (`vServ`, tributação e ISSQN) em XML autorizado real, pois a DPS vem aninhada em `infNFSe`. Corrigida a leitura; há teste com a estrutura real.
+
+### Adicionado
+
+- `DanfseIndisponivelException` (estende `CommunicationException`). `Tools::baixarDanfse()` a lança em falhas de conexão/TLS (ex.: `sslv3 alert handshake failure`) e em respostas 5xx/410, pois a API de download do DANFSe foi descontinuada em 03/08/2026 (NT 008 v1.02). Depois da primeira falha a instância não tenta de novo.
+- `Tools::obterDanfse($chave, $xmlNfse)` - tenta a API uma vez e, se estiver indisponível, gera o PDF com `DanfseGeneratorNacional`. Retorna `['pdf' => ..., 'origem' => 'api'|'local']`.
+
+### Alterado
+
+- `mpdf/mpdf ^8.0` passa a ser declarado em `require` (já era usado por `DanfseGeneratorNacional`).
+
+---
+
 ## [2.0.1] - 2026-11-26
 
 ### Adicionado

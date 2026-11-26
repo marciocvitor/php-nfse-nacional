@@ -658,8 +658,10 @@ class DanfseGeneratorNacional
             }
 
             // Valores
-            // valores da DPS (vServ, trib); os de infNFSe (vLiq, vBC, pAliqAplic, vISSQN) são lidos à parte
-            $valoresNodes = $xpath->query('//sped:valores[not(ancestor::sped:infNFSe)] | //valores[not(ancestor::infNFSe)]');
+            // valores da DPS (vServ, trib); os de infNFSe (vLiq, vBC, pAliqAplic, vISSQN) são lidos à parte.
+            // No XML autorizado a DPS vem aninhada em infNFSe (NFSe/infNFSe/DPS/infDPS), por isso o
+            // filtro é pelo pai infDPS e não pela ausência do ancestral infNFSe.
+            $valoresNodes = $xpath->query('//sped:infDPS/sped:valores | //infDPS/valores');
             if ($valoresNodes->length > 0) {
                 $valores = $valoresNodes->item(0);
                 $dados['vServ'] = (float)$this->getNodeValue($xpath, $valores, './/sped:vServ | .//vServ');

@@ -285,9 +285,17 @@ class Make
         $prest = $this->el($dom, $inf, 'prest');
         $this->el($dom, $prest, 'CNPJ', $this->prestador['cnpj']);
         $this->el($dom, $prest, 'IM', $this->prestador['im']);
-        $this->el($dom, $prest, 'xNome', $this->prestador['razaoSocial']);
 
-        if ($this->temEndereco($this->prestador)) {
+        // Quando o emitente da DPS é o próprio prestador (tpEmit = 1), a SEFIN já conhece
+        // o cadastro e rejeita o nome (E0121) e o endereço (E0128) informados na DPS.
+        // Telefone e e-mail continuam aceitos.
+        $emitentePrestador = $this->tpEmit === 1;
+
+        if (!$emitentePrestador && !empty($this->prestador['razaoSocial'])) {
+            $this->el($dom, $prest, 'xNome', $this->prestador['razaoSocial']);
+        }
+
+        if (!$emitentePrestador && $this->temEndereco($this->prestador)) {
             $this->montarEndereco($dom, $prest, $this->prestador);
         }
 
@@ -382,7 +390,9 @@ class Make
         // tpRetISSQN: 1=não retido, 2=retido pelo tomador, 3=retido pelo intermediário
         $this->el($dom, $tribMun, 'tpRetISSQN', $this->servico['issRetido'] === 1 ? '2' : '1');
         // pAliq (opcional no XSD): alíquota do ISS. Obrigatória fora do Sistema Nacional.
-        if (!empty($this->servico['pAliq'])) {
+        // Alíquota zero não é emitida: sem retenção do ISSQN a SEFIN rejeita pAliq (E0625).
+        // O valor chega como string normalizada ("0.00"), que o empty() do PHP não considera vazia.
+        if (isset($this->servico['pAliq']) && (float) $this->servico['pAliq'] > 0) {
             $this->el($dom, $tribMun, 'pAliq', $this->servico['pAliq']);
         }
 
@@ -443,6 +453,9 @@ class Make
         }
         if (empty($this->prestador)) {
             $erros[] = 'Dados do prestador não informados';
+        } elseif ($this->tpEmit !== 1 && trim((string) ($this->prestador['razaoSocial'] ?? '')) === '') {
+            // Com tpEmit = 1 o nome não é enviado (SEFIN E0121); nos demais casos é necessário.
+            $erros[] = 'Razão social do prestador é obrigatória quando o emitente não é o prestador (tpEmit diferente de 1)';
         }
         if (empty($this->tomador)) {
             $erros[] = 'Dados do tomador não informados';

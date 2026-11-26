@@ -46,10 +46,9 @@ class DpsValidator
             $errors[] = 'Inscrição municipal do prestador é obrigatória';
         }
 
+        // A razão social só é enviada na DPS quando o emitente não é o prestador (tpEmit diferente de 1);
+        // por isso a exigência é feita em Make::getDPSXML(), que conhece o tpEmit.
         $razaoSocial = trim((string) ($prestador['razaoSocial'] ?? ''));
-        if ($razaoSocial === '') {
-            $errors[] = 'Razão social do prestador é obrigatória';
-        }
 
         $opSimpNac = $this->inteiroEm($prestador['opSimpNac'] ?? null, self::OP_SIMP_NAC);
         if ($opSimpNac === null) {

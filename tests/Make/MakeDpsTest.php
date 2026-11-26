@@ -266,6 +266,172 @@ class MakeDpsTest extends TestCase
         $this->assertStringContainsString('<pAliq>4.00</pAliq>', $xml);
     }
 
+    /** @return array<string, mixed> prestador completo, com endereço, telefone e e-mail */
+    private function prestadorComEndereco(): array
+    {
+        return $this->prestador([
+            'codigoMunicipio' => '3550308',
+            'cep' => '01001-000',
+            'endereco' => 'Rua do Prestador',
+            'numero' => '10',
+            'bairro' => 'Centro',
+            'telefone' => '(11) 3333-4444',
+            'email' => 'prestador@exemplo.com',
+        ]);
+    }
+
+    private function prestadorElement(string $xml): \DOMElement
+    {
+        $dom = new DOMDocument();
+        $dom->loadXML($xml);
+        $prest = $dom->getElementsByTagNameNS(Make::NAMESPACE, 'prest')->item(0);
+        $this->assertInstanceOf(\DOMElement::class, $prest);
+
+        return $prest;
+    }
+
+    private function filhos(\DOMElement $pai, string $nome): int
+    {
+        return $pai->getElementsByTagNameNS(Make::NAMESPACE, $nome)->length;
+    }
+
+    // BUG 1 — tpEmit = 1: SEFIN rejeita xNome (E0121) e end (E0128) do prestador
+
+    public function testTpEmitPrestadorNaoEmiteNomeNemEnderecoDoPrestador(): void
+    {
+        $xml = $this->montar(2, $this->prestadorComEndereco())->setTpEmit(1)->getDPSXML();
+        $prest = $this->prestadorElement($xml);
+
+        $this->assertSame(0, $this->filhos($prest, 'xNome'), 'xNome do prestador não pode ir na DPS (E0121)');
+        $this->assertSame(0, $this->filhos($prest, 'end'), 'end do prestador não pode ir na DPS (E0128)');
+        $this->assertStringNotContainsString('Empresa Teste LTDA', $prest->ownerDocument->saveXML($prest));
+        $this->assertSchemaValido($xml);
+    }
+
+    public function testTpEmitPrestadorMantemTelefoneEEmailDoPrestador(): void
+    {
+        $xml = $this->montar(2, $this->prestadorComEndereco())->setTpEmit(1)->getDPSXML();
+        $prest = $this->prestadorElement($xml);
+
+        $this->assertSame(1, $this->filhos($prest, 'fone'));
+        $this->assertSame(1, $this->filhos($prest, 'email'));
+        $this->assertStringContainsString('<fone>1133334444</fone>', $xml);
+        $this->assertStringContainsString('<email>prestador@exemplo.com</email>', $xml);
+    }
+
+    public function testTpEmitPrestadorNaoExigeRazaoSocialParaMontarOXml(): void
+    {
+        $prestador = $this->prestador();
+        unset($prestador['razaoSocial']);
+
+        $xml = (new Make())
+            ->setTpAmb(2)
+            ->setTpEmit(1)
+            ->setCLocEmi('3550308')
+            ->setIdentificacao(['numero' => '1', 'serie' => '1'])
+            ->setPrestador($prestador)
+            ->setTomador($this->tomador())
+            ->setServico($this->servico())
+            ->getDPSXML();
+
+        $this->assertSchemaValido($xml);
+        $this->assertSame(0, $this->filhos($this->prestadorElement($xml), 'xNome'));
+    }
+
+    public function testTpEmitTomadorContinuaEmitindoNomeEEnderecoDoPrestador(): void
+    {
+        $xml = $this->montar(2, $this->prestadorComEndereco())->setTpEmit(2)->getDPSXML();
+        $prest = $this->prestadorElement($xml);
+
+        $this->assertSame(1, $this->filhos($prest, 'xNome'));
+        $this->assertSame(1, $this->filhos($prest, 'end'));
+        $this->assertStringContainsString('<xNome>Empresa Teste LTDA</xNome>', $prest->ownerDocument->saveXML($prest));
+        $this->assertSchemaValido($xml);
+    }
+
+    public function testRazaoSocialDoPrestadorContinuaObrigatoriaQuandoOEmitenteNaoEOPrestador(): void
+    {
+        $prestador = $this->prestador();
+        unset($prestador['razaoSocial']);
+
+        $make = (new Make())
+            ->setTpAmb(2)
+            ->setTpEmit(2)
+            ->setCLocEmi('3550308')
+            ->setIdentificacao(['numero' => '1', 'serie' => '1'])
+            ->setPrestador($prestador)
+            ->setTomador($this->tomador())
+            ->setServico($this->servico());
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Razão social do prestador');
+        $make->getDPSXML();
+    }
+
+    public function testOrdemDeChamadaDeSetTpEmitNaoImporta(): void
+    {
+        // setTpEmit depois de setPrestador/setServico deve produzir o mesmo XML
+        $make = (new Make())
+            ->setTpAmb(2)
+            ->setCLocEmi('3550308')
+            ->setIdentificacao(['numero' => '1', 'serie' => '1'])
+            ->setPrestador($this->prestadorComEndereco())
+            ->setTomador($this->tomador())
+            ->setServico($this->servico())
+            ->setTpEmit(1);
+
+        $this->assertSame(0, $this->filhos($this->prestadorElement($make->getDPSXML()), 'end'));
+    }
+
+    // BUG 3 — pAliq zero: SEFIN rejeita com E0625 quando não há retenção do ISSQN
+
+    /** @return array<string, array{0: mixed}> */
+    public static function aliquotasZero(): array
+    {
+        return [
+            'inteiro zero' => [0],
+            'float zero' => [0.0],
+            'string 0' => ['0'],
+            'string 0.00' => ['0.00'],
+            'string 0.0000 (formato do ERP)' => ['0.0000'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('aliquotasZero')]
+    public function testAliquotaZeroNaoEmitePAliq(mixed $aliquota): void
+    {
+        $xml = $this->montar(2, ['opSimpNac' => 3, 'regApTribSN' => 1], [], [
+            'aliquota' => $aliquota,
+            'issRetido' => 2,
+        ])->getDPSXML();
+
+        $this->assertStringNotContainsString('pAliq>', $xml);
+        $this->assertStringContainsString('<tpRetISSQN>1</tpRetISSQN>', $xml);
+        $this->assertSchemaValido($xml);
+    }
+
+    public function testPAliqZeroPeloNomeDoXsdTambemNaoEEmitido(): void
+    {
+        $xml = $this->montar()->setServico(['pAliq' => '0.00'])->getDPSXML();
+
+        $this->assertStringNotContainsString('pAliq>', $xml);
+    }
+
+    public function testAliquotaPositivaPequenaAindaEEmitida(): void
+    {
+        $xml = $this->montar()->setServico(['aliquota' => '0.0100'])->getDPSXML();
+
+        $this->assertStringContainsString('<pAliq>0.01</pAliq>', $xml);
+    }
+
+    public function testAliquotaZeroSubstituiAliquotaAnteriorEOmiteOGrupo(): void
+    {
+        $make = $this->montar()->setServico(['aliquota' => 5.0]);
+        $make->setServico(['aliquota' => 0]);
+
+        $this->assertStringNotContainsString('pAliq>', $make->getDPSXML());
+    }
+
     public function testChavesDesconhecidasDoErpSaoIgnoradasSemErro(): void
     {
         // O ERP ainda envia estas chaves; a v2 não pode falhar por causa delas

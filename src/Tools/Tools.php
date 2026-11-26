@@ -8,13 +8,17 @@ use NFSeNacional\Common\Logger;
 use NFSeNacional\Common\Response;
 use NFSeNacional\Config\Config;
 use NFSeNacional\Exception\CommunicationException;
+use NFSeNacional\Exception\DanfseIndisponivelException;
 use NFSeNacional\Exception\ValidationException;
 use NFSeNacional\Pdf\DanfseGenerator;
+use NFSeNacional\Pdf\DanfseGeneratorNacional;
 use NFSeNacional\Security\Certificate;
 use NFSeNacional\Security\XmlSigner;
 use NFSeNacional\Validator\SchemaType;
 use NFSeNacional\Validator\SchemaValidator;
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\BadResponseException;
+use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\RequestOptions;
 use Throwable;
 
@@ -31,6 +35,8 @@ class Tools
     private SchemaValidator $schemaValidator;
     private Logger $logger;
     private Client $httpClient;
+    /** Marcado na primeira falha da API de DANFSe (descontinuada em 03/08/2026) para não insistir. */
+    private bool $danfseApiIndisponivel = false;
 
     public function __construct(
         private readonly Config $config,
@@ -324,12 +330,25 @@ class Tools
      * Endpoint: GET /danfse/{chaveAcesso}
      * Retorna o PDF oficial do DANFSe gerado pelo Portal Nacional
      *
-     * @param string $chaveAcesso Chave de acesso da NFS-e (44 dígitos)
+     * ATENÇÃO: o serviço foi descontinuado em 03/08/2026 (NT 008 v1.02). Falhas de conexão/TLS
+     * (ex.: "sslv3 alert handshake failure") e respostas 5xx/410 são tratadas como
+     * indisponibilidade: lança DanfseIndisponivelException, sem nova tentativa, e as chamadas
+     * seguintes desta instância falham de imediato. Use obterDanfse() para cair no gerador local.
+     *
+     * @param string $chaveAcesso Chave de acesso da NFS-e (50 dígitos)
      * @return string Conteúdo binário do PDF
+     * @throws DanfseIndisponivelException Se a API de DANFSe estiver indisponível
      * @throws CommunicationException Se houver erro na comunicação ou se o PDF não for encontrado
      */
     public function baixarDanfse(string $chaveAcesso): string
     {
+        if ($this->danfseApiIndisponivel) {
+            throw new DanfseIndisponivelException(
+                'API de DANFSe indisponível nesta sessão (serviço descontinuado em 03/08/2026); '
+                . 'gere o DANFSe localmente. Nova tentativa não realizada.'
+            );
+        }
+
         try {
             // GET /danfse/{chaveAcesso} - retorna PDF binário diretamente
             $url = $this->config->getApiEndpoint('/danfse/' . $chaveAcesso);
@@ -341,13 +360,31 @@ class Tools
                 $certConfig = [$certPemPath, $certPassphrase];
             }
 
-            $response = $this->httpClient->request('GET', $url, [
-                RequestOptions::CERT => $certConfig,
-                RequestOptions::VERIFY => $this->config->ambiente === 1,
-                RequestOptions::HEADERS => [
-                    'Accept' => 'application/pdf',
-                ],
-            ]);
+            try {
+                $response = $this->httpClient->request('GET', $url, [
+                    RequestOptions::CERT => $certConfig,
+                    RequestOptions::VERIFY => $this->config->ambiente === 1,
+                    RequestOptions::HEADERS => [
+                        'Accept' => 'application/pdf',
+                    ],
+                ]);
+            } catch (BadResponseException $e) {
+                $status = $e->getResponse()->getStatusCode();
+                if ($status >= 500 || $status === 410) {
+                    throw $this->marcarDanfseIndisponivel("HTTP {$status}", $e);
+                }
+
+                $json = @json_decode((string) $e->getResponse()->getBody(), true);
+                $detalhe = is_array($json) ? ($json['mensagem'] ?? $json['message'] ?? null) : null;
+                throw new CommunicationException(
+                    'Erro ao baixar DANFSe: ' . ($detalhe ?? "HTTP {$status}"),
+                    $status,
+                    $e
+                );
+            } catch (TransferException $e) {
+                // Sem resposta HTTP: conexão recusada, timeout ou falha de TLS (cURL 35/56/58/60...)
+                throw $this->marcarDanfseIndisponivel($e->getMessage(), $e);
+            }
 
             $statusCode = $response->getStatusCode();
             $body = (string) $response->getBody();
@@ -392,6 +429,60 @@ class Tools
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * Registra que a API de DANFSe está fora do ar (sem novas tentativas) e devolve a exceção a lançar.
+     */
+    private function marcarDanfseIndisponivel(string $detalhe, Throwable $anterior): DanfseIndisponivelException
+    {
+        $this->danfseApiIndisponivel = true;
+
+        return new DanfseIndisponivelException(
+            "API de DANFSe indisponível (serviço descontinuado em 03/08/2026): {$detalhe}",
+            0,
+            $anterior
+        );
+    }
+
+    /**
+     * Obtém o PDF do DANFSe: tenta a API oficial uma única vez e, se estiver indisponível,
+     * gera o DANFSe localmente (DanfseGeneratorNacional) a partir do XML autorizado da NFS-e.
+     *
+     * Depois da primeira indisponibilidade, esta instância não volta a chamar a API.
+     *
+     * @param string $chaveAcesso Chave de acesso da NFS-e (50 dígitos)
+     * @param string $xmlNfse XML autorizado da NFS-e (elemento NFSe)
+     * @param array $dadosAdicionais Dados extras para o gerador local
+     * @return array{pdf: string, origem: string} origem = 'api' (oficial) ou 'local' (gerador da biblioteca)
+     * @throws \InvalidArgumentException Se a API estiver indisponível e o XML não for informado
+     * @throws \RuntimeException Se o gerador local não puder ser usado (mpdf ausente)
+     */
+    public function obterDanfse(string $chaveAcesso, string $xmlNfse, array $dadosAdicionais = []): array
+    {
+        try {
+            return ['pdf' => $this->baixarDanfse($chaveAcesso), 'origem' => 'api'];
+        } catch (DanfseIndisponivelException) {
+            // segue para o gerador local
+        }
+
+        if (trim($xmlNfse) === '') {
+            throw new \InvalidArgumentException('XML da NFS-e é necessário para gerar o DANFSe localmente.');
+        }
+        if (!class_exists(\Mpdf\Mpdf::class)) {
+            throw new \RuntimeException('Gerador local de DANFSe requer mpdf/mpdf (composer require mpdf/mpdf).');
+        }
+
+        $response = new Response(sucesso: true, xml: $xmlNfse);
+        $pdf = (new DanfseGeneratorNacional())->gerar($response, $dadosAdicionais);
+
+        $this->logger->log('ObterDanfse', "DANFSe gerado localmente: {$chaveAcesso}", [
+            'chaveAcesso' => $chaveAcesso,
+            'origem' => 'local',
+            'tamanhoPdf' => strlen($pdf),
+        ]);
+
+        return ['pdf' => $pdf, 'origem' => 'local'];
     }
 
     /**
@@ -941,6 +1032,9 @@ class Tools
      *
      * O XML do evento segue o padrão do SPED para eventos de NFS-e
      *
+     * O Id do pedRegEvento é "PRE" + chave(50) + "101101" (59 caracteres); $nPedRegEvento
+     * não compõe o Id (a SEFIN rejeita 62 caracteres com E1235) e é mantido só por compatibilidade.
+     *
      * @return array ['xml' => string, 'idEvento' => string]
      */
     private function gerarXmlEventoCancelamento(string $chaveAcesso, string $motivo, int $cMotivo = 2, int $nPedRegEvento = 1): array
@@ -959,9 +1053,11 @@ class Tools
             throw new ValidationException('A justificativa de cancelamento deve ter entre 15 e 255 caracteres.');
         }
 
-        // TSIdPedRegEvt: "PRE" + chave(50) + tpEvento(6) + nPedRegEvento(3) = 59 caracteres
+        // TSIdPedRegEvt (maxLength 59): "PRE" + chave(50) + tpEvento(6) = 59 caracteres.
+        // O sufixo nPedRegEvento citado na documentação do XSD levaria o Id a 62 caracteres e a SEFIN
+        // rejeita com E1235 (Pattern constraint failed); por isso ele não faz parte do Id.
         $tpEvento = '101101';
-        $idEvento = 'PRE' . $chaveAcesso . $tpEvento . str_pad((string) $nPedRegEvento, 3, '0', STR_PAD_LEFT);
+        $idEvento = 'PRE' . $chaveAcesso . $tpEvento;
 
         $cnpjAutor = strtoupper((string) preg_replace('/[^0-9A-Za-z]/', '', $this->config->cnpj));
         $dhEvento = (new \DateTimeImmutable('now', new \DateTimeZone('America/Sao_Paulo')))->format('Y-m-d\TH:i:sP');
