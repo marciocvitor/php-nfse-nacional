@@ -70,41 +70,6 @@ class Logger
     }
 
     /**
-     * Registra envio de lote
-     */
-    public function logEnvioLote(string $numeroLote, int $quantidadeDps, bool $sucesso, ?string $protocolo = null, ?string $erro = null): void
-    {
-        $mensagem = $sucesso
-            ? "Lote enviado com sucesso. Protocolo: {$protocolo}"
-            : "Falha ao enviar lote. Erro: {$erro}";
-
-        $this->log('EnviarLoteRps', $mensagem, [
-            'numeroLote' => $numeroLote,
-            'quantidadeDps' => $quantidadeDps,
-            'protocolo' => $protocolo,
-            'sucesso' => $sucesso,
-            'erro' => $erro
-        ]);
-    }
-
-    /**
-     * Registra consulta de lote
-     */
-    public function logConsultaLote(string $protocolo, bool $sucesso, ?string $situacao = null, ?string $erro = null): void
-    {
-        $mensagem = $sucesso
-            ? "Lote consultado. Situação: {$situacao}"
-            : "Falha ao consultar lote. Erro: {$erro}";
-
-        $this->log('ConsultarLoteRps', $mensagem, [
-            'protocolo' => $protocolo,
-            'situacao' => $situacao,
-            'sucesso' => $sucesso,
-            'erro' => $erro
-        ]);
-    }
-
-    /**
      * Registra cancelamento de NFSe
      */
     public function logCancelamento(string $numeroNfse, bool $sucesso, ?string $erro = null): void

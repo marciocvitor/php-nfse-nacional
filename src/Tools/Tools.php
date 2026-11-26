@@ -112,125 +112,21 @@ class Tools
 
 
     /**
-     * Envia lote de DPS (ASSÍNCRONO)
-     */
-    public function enviarLoteDps(array $listaDps, string $numeroLote): Response
-    {
-        try {
-            if (empty($listaDps)) {
-                throw new ValidationException('Lista de DPS vazia');
-            }
-
-            if (count($listaDps) > 50) {
-                throw new ValidationException('Limite máximo de 50 DPS por lote excedido');
-            }
-
-            $assinadas = [];
-            foreach ($listaDps as $dpsXml) {
-                $this->validateXml($dpsXml, SchemaType::DPS);
-                $assinadas[] = $this->signer->sign($dpsXml);
-            }
-
-            $xmlLote = $this->gerarXmlLote($assinadas, $numeroLote);
-            $this->validateXml($xmlLote, SchemaType::LOTE);
-            $signedLote = $this->signer->sign($xmlLote, 'LoteRps');
-            $restResult = $this->callRest('POST', '/lote', $signedLote);
-            $xmlResult = $restResult['xml'];
-            $chaveAcesso = $restResult['chaveAcesso'] ?? null;
-            $response = $this->buildResponse($xmlResult, 'RecepcionarLoteRps', $chaveAcesso);
-
-            $protocolo = $response->dados['parsed']['Protocolo'] ?? null;
-
-            $this->logger->logEnvioLote(
-                $numeroLote,
-                count($listaDps),
-                $response->sucesso,
-                $protocolo ? (string) $protocolo : null,
-                $response->sucesso ? null : $response->mensagem
-            );
-
-            return $response;
-        } catch (Throwable $e) {
-            $this->logger->logEnvioLote($numeroLote, count($listaDps), false, null, $e->getMessage());
-            throw $e;
-        }
-    }
-
-    /**
-     * Consulta resultado de um lote pelo protocolo (ASSÍNCRONO)
-     */
-    public function consultarLote(string $protocolo): Response
-    {
-        try {
-            $xml = $this->gerarXmlConsultaLote($protocolo);
-            $restResult = $this->callRest('POST', '/lote/consulta', $xml);
-            $xmlResult = $restResult['xml'];
-            $chaveAcesso = $restResult['chaveAcesso'] ?? null;
-            $response = $this->buildResponse($xmlResult, 'ConsultarLoteRps', $chaveAcesso);
-
-            $situacao = $response->dados['parsed']['Situacao'] ?? null;
-
-            $this->logger->logConsultaLote(
-                $protocolo,
-                $response->sucesso,
-                $situacao ? (string) $situacao : null,
-                $response->sucesso ? null : $response->mensagem
-            );
-
-            return $response;
-        } catch (Throwable $e) {
-            $this->logger->logConsultaLote($protocolo, false, null, $e->getMessage());
-            throw $e;
-        }
-    }
-
-    /**
-     * Consulta NFSe individual por número (SÍNCRONO)
-     */
-    public function consultarNfse(string $numero): Response
-    {
-        try {
-            $xml = $this->gerarXmlConsultaNfse($numero);
-            $restResult = $this->callRest('POST', '/nfse/consulta', $xml);
-            $xmlResult = $restResult['xml'];
-            $chaveAcesso = $restResult['chaveAcesso'] ?? null;
-            $response = $this->buildResponse($xmlResult, 'ConsultarNfse', $chaveAcesso);
-
-            $this->logger->log('ConsultarNfse', "Consulta realizada para NFSe: {$numero}", [
-                'numero' => $numero,
-                'sucesso' => $response->sucesso
-            ]);
-
-            return $response;
-        } catch (Throwable $e) {
-            $this->logger->log('ConsultarNfse', "Falha ao consultar NFSe: {$numero}", [
-                'numero' => $numero,
-                'erro' => $e->getMessage()
-            ]);
-            throw $e;
-        }
-    }
-
-    /**
      * Cancela NFSe individual via API de Eventos
      *
-     * NOTA IMPORTANTE: O schema XSD do Portal Nacional de NFS-e espera elementos específicos
-     * após <nPedRegEvento> (e101101, e105102, etc.), mas o cancelamento (110111) não está
-     * na lista de elementos suportados. Isso pode indicar que:
-     * 1. O cancelamento não é suportado por este schema/endpoint
-     * 2. O cancelamento usa outro código/estrutura
-     * 3. Há outro método/endpoint para cancelamento
+     * O evento é um pedRegEvento (schema pedRegEvento_v1.01.xsd), com tpEvento 101101.
      *
-     * @param string $chaveAcesso Chave de acesso da NFS-e (44 dígitos)
-     * @param string $motivo Motivo do cancelamento
+     * @param string $chaveAcesso Chave de acesso da NFS-e (50 dígitos)
+     * @param string $motivo Justificativa do cancelamento (15 a 255 caracteres)
+     * @param int $cMotivo Código do motivo: 1, 2 ou 9 (TSCodJustCanc). Confirme o significado no Anexo oficial.
      * @return Response
      */
-    public function cancelarNfse(string $chaveAcesso, string $motivo): Response
+    public function cancelarNfse(string $chaveAcesso, string $motivo, int $cMotivo = 2): Response
     {
         try {
             // Gerar XML do evento de cancelamento no formato SPED
             // O método retorna tanto o XML quanto o ID do evento para referência na assinatura
-            $resultadoXml = $this->gerarXmlEventoCancelamento($chaveAcesso, $motivo);
+            $resultadoXml = $this->gerarXmlEventoCancelamento($chaveAcesso, $motivo, $cMotivo);
             $xmlEvento = $resultadoXml['xml'];
             $idEvento = $resultadoXml['idEvento'];
 
@@ -1040,63 +936,6 @@ class Tools
     }
 
     /**
-     * Gera XML do lote de DPS
-     */
-    private function gerarXmlLote(array $listaDps, string $numeroLote): string
-    {
-        $xml = '<?xml version="1.0" encoding="UTF-8"?>';
-        $xml .= '<EnviarLoteRpsEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">';
-        // IMPORTANTE: A partir de 10/12/2025, homologação (ambiente 2) usa versão 1.01, produção (ambiente 1) usa 1.00
-        $versao = $this->config->ambiente == 2 ? '1.01' : '1.00';
-        $xml .= '<LoteRps Id="' . $numeroLote . '" versao="' . $versao . '">';
-        $xml .= '<NumeroLote>' . $numeroLote . '</NumeroLote>';
-        $xml .= '<CpfCnpj><Cnpj>' . $this->config->cnpj . '</Cnpj></CpfCnpj>';
-        $xml .= '<InscricaoMunicipal>' . $this->config->im . '</InscricaoMunicipal>';
-        $xml .= '<QuantidadeRps>' . count($listaDps) . '</QuantidadeRps>';
-        $xml .= '<ListaRps>';
-
-        foreach ($listaDps as $dps) {
-            $xml .= '<Rps>';
-            $xml .= str_replace(
-                ['<?xml version="1.0" encoding="UTF-8"?>', '<EnviarDpsEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">', '</EnviarDpsEnvio>', '<Dps>', '</Dps>'],
-                '',
-                $dps
-            );
-            $xml .= '</Rps>';
-        }
-
-        $xml .= '</ListaRps>';
-        $xml .= '</LoteRps>';
-        $xml .= '</EnviarLoteRpsEnvio>';
-
-        return $xml;
-    }
-
-    private function gerarXmlConsultaLote(string $protocolo): string
-    {
-        return '<?xml version="1.0" encoding="UTF-8"?>'
-            . '<ConsultarLoteRpsEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">'
-            . '<Prestador>'
-            . '<CpfCnpj><Cnpj>' . $this->config->cnpj . '</Cnpj></CpfCnpj>'
-            . '<InscricaoMunicipal>' . $this->config->im . '</InscricaoMunicipal>'
-            . '</Prestador>'
-            . '<Protocolo>' . $protocolo . '</Protocolo>'
-            . '</ConsultarLoteRpsEnvio>';
-    }
-
-    private function gerarXmlConsultaNfse(string $numero): string
-    {
-        return '<?xml version="1.0" encoding="UTF-8"?>'
-            . '<ConsultarNfseEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">'
-            . '<Prestador>'
-            . '<CpfCnpj><Cnpj>' . $this->config->cnpj . '</Cnpj></CpfCnpj>'
-            . '<InscricaoMunicipal>' . $this->config->im . '</InscricaoMunicipal>'
-            . '</Prestador>'
-            . '<NumeroNfse>' . $numero . '</NumeroNfse>'
-            . '</ConsultarNfseEnvio>';
-    }
-
-    /**
      * Gera XML do evento de cancelamento no formato SPED
      * Conforme Anexo II - Eventos do Sistema Nacional
      *
@@ -1104,91 +943,76 @@ class Tools
      *
      * @return array ['xml' => string, 'idEvento' => string]
      */
-    private function gerarXmlEventoCancelamento(string $chaveAcesso, string $motivo, int $nPedRegEvento = 1): array
+    private function gerarXmlEventoCancelamento(string $chaveAcesso, string $motivo, int $cMotivo = 2, int $nPedRegEvento = 1): array
     {
-        // Tipo de evento (cancelamento) - código 101101
-        $tpEvento = '101101';
-
-        // Número do Pedido de Registro do Evento em 3 dígitos (com zeros à esquerda)
-        $nPedRegEventoStr = str_pad((string)$nPedRegEvento, 3, '0', STR_PAD_LEFT);
-
-        // Id conforme TSIdPedRefEvt:
-        // PRE + chave(50 dígitos) + tpEvento(6 dígitos) + nPedRegEvento(3 dígitos)
-        // Total: 3 + 50 + 6 + 3 = 62 caracteres
-        $idEvento = 'PRE' . $chaveAcesso . $tpEvento . $nPedRegEventoStr;
-
-        // nSeqEvento lógico (para o mesmo documento, 1, 2, 3...); aqui fixamos 1 para cancelamento
-        $nSeqEvento = 1;
-
-        // Data/hora do evento no formato ISO 8601 com timezone
-        $timezone = new \DateTimeZone('America/Sao_Paulo');
-        $dhEvento = (new \DateTime('now', $timezone))->format('c');
-
-        // Versão da aplicação (padrão se não configurado)
-        $verAplic = $this->config->versaoAplicativo ?? 'Decorsoft_1.0.0';
-
-        // CNPJ/CPF do autor (prestador que está cancelando)
-        // O autor é quem está assinando o evento, ou seja, o prestador da NFS-e
-        $cnpjAutor = preg_replace('/[^0-9]/', '', $this->config->cnpj ?? '');
-
-        // Validar tamanho da chave de acesso (50 dígitos numéricos)
         if (strlen($chaveAcesso) !== 50 || !ctype_digit($chaveAcesso)) {
             throw new ValidationException('A chave de acesso deve conter exatamente 50 dígitos numéricos para eventos da NFS-e Nacional.');
         }
 
-        // Limpar motivo: remover quebras de linha, espaços extras e dois pontos fixos
-        $motivoLimpo = trim($motivo);
-        $motivoLimpo = preg_replace('/\s+/', ' ', $motivoLimpo); // Múltiplos espaços viram um
-        $motivoLimpo = rtrim($motivoLimpo, ':'); // Remove dois pontos no final se houver
-
-        // Validar tamanho mínimo do motivo (15 caracteres conforme schema)
-        if (mb_strlen($motivoLimpo, 'UTF-8') < 15) {
-            throw new ValidationException('A justificativa de cancelamento deve ter no mínimo 15 caracteres.');
+        if (!in_array($cMotivo, [1, 2, 9], true)) {
+            throw new ValidationException('Código de motivo do cancelamento inválido (use 1, 2 ou 9).');
         }
 
-        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-        // Elemento raiz correto: pedRegEvento
-        // IMPORTANTE: A partir de 10/12/2025, homologação (ambiente 2) usa versão 1.01, produção (ambiente 1) usa 1.00
-        $versao = $this->config->ambiente == 2 ? '1.01' : '1.00';
-        $xml .= '<pedRegEvento xmlns="http://www.sped.fazenda.gov.br/nfse" versao="' . $versao . '">' . "\n";
-        // Elemento filho correto: infPedReg (não infEvento)
-        // Usar 'Id' maiúsculo conforme esperado pelo schema e pelo XmlSigner
-        $xml .= '  <infPedReg Id="' . htmlspecialchars($idEvento, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '">' . "\n";
-        $xml .= '    <tpAmb>' . (int)$this->config->ambiente . '</tpAmb>' . "\n";
-        // IMPORTANTE: verAplic DEVE vir antes de dhEvento conforme o schema XSD do Portal Nacional
-        $xml .= '    <verAplic>' . htmlspecialchars($verAplic, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '</verAplic>' . "\n";
-        $xml .= '    <dhEvento>' . htmlspecialchars($dhEvento, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '</dhEvento>' . "\n";
-        // IMPORTANTE: CNPJAutor/CPFAutor DEVE vir após dhEvento e antes de chNfse conforme o schema XSD
-        if (strlen($cnpjAutor) == 14) {
-            // CNPJ (14 dígitos)
-            $xml .= '    <CNPJAutor>' . htmlspecialchars($cnpjAutor, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '</CNPJAutor>' . "\n";
-        } elseif (strlen($cnpjAutor) == 11) {
-            // CPF (11 dígitos)
-            $xml .= '    <CPFAutor>' . htmlspecialchars($cnpjAutor, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '</CPFAutor>' . "\n";
-        } else {
-            // Se não tiver CNPJ/CPF válido, usar CNPJ vazio (melhor que quebrar)
-            // Mas isso não deveria acontecer se a configuração estiver correta
-            $xml .= '    <CNPJAutor>' . htmlspecialchars($cnpjAutor, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '</CNPJAutor>' . "\n";
+        $motivoLimpo = rtrim(trim((string) preg_replace('/\s+/', ' ', $motivo)), ':');
+        $tamanho = mb_strlen($motivoLimpo, 'UTF-8');
+        if ($tamanho < 15 || $tamanho > 255) {
+            throw new ValidationException('A justificativa de cancelamento deve ter entre 15 e 255 caracteres.');
         }
-        // IMPORTANTE: O schema exige 'chNFSe' (com NFSe em maiúsculas), não 'chNfse'
-        $xml .= '    <chNFSe>' . htmlspecialchars($chaveAcesso, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '</chNFSe>' . "\n";
-        // IMPORTANTE: nPedRegEvento DEVE vir após chNFSe conforme o schema XSD
-        $xml .= '    <nPedRegEvento>' . htmlspecialchars($nPedRegEventoStr, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '</nPedRegEvento>' . "\n";
-        // IMPORTANTE: O schema espera elementos específicos após nPedRegEvento
-        // Para cancelamento, vamos tentar colocar tpEvento e nSeqEvento dentro de detEvento
-        // ou usar apenas detEvento diretamente
-        $xml .= '    <e101101>' . "\n";
-        $xml .= '      <xDesc>Cancelamento de NFS-e</xDesc>' . "\n";
-        $xml .= '      <cMotivo>2</cMotivo>' . "\n";
-        $xml .= '      <xMotivo>' . htmlspecialchars($motivoLimpo, ENT_XML1 | ENT_COMPAT, 'UTF-8') . '</xMotivo>' . "\n";
-        $xml .= '    </e101101>' . "\n";
-        $xml .= '  </infPedReg>' . "\n";
-        $xml .= '</pedRegEvento>';
+
+        // TSIdPedRegEvt: "PRE" + chave(50) + tpEvento(6) + nPedRegEvento(3) = 59 caracteres
+        $tpEvento = '101101';
+        $idEvento = 'PRE' . $chaveAcesso . $tpEvento . str_pad((string) $nPedRegEvento, 3, '0', STR_PAD_LEFT);
+
+        $cnpjAutor = strtoupper((string) preg_replace('/[^0-9A-Za-z]/', '', $this->config->cnpj));
+        $dhEvento = (new \DateTimeImmutable('now', new \DateTimeZone('America/Sao_Paulo')))->format('Y-m-d\TH:i:sP');
+
+        $ns = 'http://www.sped.fazenda.gov.br/nfse';
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->formatOutput = true;
+
+        $root = $dom->createElementNS($ns, 'pedRegEvento');
+        $root->setAttribute('versao', '1.01');
+        $dom->appendChild($root);
+
+        $inf = $dom->createElementNS($ns, 'infPedReg');
+        $inf->setAttribute('Id', $idEvento);
+        $root->appendChild($inf);
+
+        // Ordem exata do TCInfPedReg: tpAmb, verAplic, dhEvento, CNPJAutor|CPFAutor, chNFSe, e101101
+        $this->elementoNs($dom, $inf, 'tpAmb', (string) $this->config->ambiente);
+        $this->elementoNs($dom, $inf, 'verAplic', '1.0.0');
+        $this->elementoNs($dom, $inf, 'dhEvento', $dhEvento);
+        $this->elementoNs($dom, $inf, strlen($cnpjAutor) === 11 ? 'CPFAutor' : 'CNPJAutor', $cnpjAutor);
+        $this->elementoNs($dom, $inf, 'chNFSe', $chaveAcesso);
+
+        $e101101 = $this->elementoNs($dom, $inf, 'e101101');
+        $this->elementoNs($dom, $e101101, 'xDesc', 'Cancelamento de NFS-e');
+        $this->elementoNs($dom, $e101101, 'cMotivo', (string) $cMotivo);
+        $this->elementoNs($dom, $e101101, 'xMotivo', $motivoLimpo);
+
+        $xml = $dom->saveXML();
+        if ($xml === false) {
+            throw new \RuntimeException('Falha ao gerar XML do evento de cancelamento');
+        }
 
         return [
             'xml' => $xml,
-            'idEvento' => $idEvento
+            'idEvento' => $idEvento,
         ];
+    }
+
+    /**
+     * Cria um elemento na namespace da NFS-e Nacional (evita xmlns="" nos filhos).
+     */
+    private function elementoNs(\DOMDocument $dom, \DOMElement $pai, string $nome, ?string $texto = null): \DOMElement
+    {
+        $elemento = $dom->createElementNS('http://www.sped.fazenda.gov.br/nfse', $nome);
+        if ($texto !== null) {
+            $elemento->appendChild($dom->createTextNode($texto));
+        }
+        $pai->appendChild($elemento);
+
+        return $elemento;
     }
 
     /**
