@@ -161,10 +161,16 @@ class Make
     /**
      * Dados do serviço. Chaves: cTribNac (6 dígitos, obrigatório), cTribMun (3 dígitos),
      * cNBS (9 dígitos), discriminacao, valorServicos, issRetido (1|2), tribISSQN (1 a 4),
+     * aliquota ou pAliq (alíquota do ISS em %, de 0 a 9,99; obrigatória fora do Sistema Nacional),
      * cLocPrestacao (IBGE; padrão = cLocEmi), piscofins (opcional).
      */
     public function setServico(array $data): self
     {
+        // Uma nova alíquota substitui a anterior (evita combinar pAliq antigo com aliquota novo)
+        if (array_key_exists('aliquota', $data) || array_key_exists('pAliq', $data)) {
+            unset($this->servico['pAliq']);
+        }
+
         $this->servico = $this->validator->validateServico(array_merge($this->servico, $data));
 
         return $this;
@@ -375,6 +381,10 @@ class Make
         $this->el($dom, $tribMun, 'tribISSQN', (string) $this->servico['tribISSQN']);
         // tpRetISSQN: 1=não retido, 2=retido pelo tomador, 3=retido pelo intermediário
         $this->el($dom, $tribMun, 'tpRetISSQN', $this->servico['issRetido'] === 1 ? '2' : '1');
+        // pAliq (opcional no XSD): alíquota do ISS. Obrigatória fora do Sistema Nacional.
+        if (!empty($this->servico['pAliq'])) {
+            $this->el($dom, $tribMun, 'pAliq', $this->servico['pAliq']);
+        }
 
         if (!empty($this->servico['piscofins']) && is_array($this->servico['piscofins'])) {
             $this->montarPisCofins($dom, $trib, $this->servico['piscofins'], $valorServicos);

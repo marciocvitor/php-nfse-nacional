@@ -169,6 +169,19 @@ class DpsValidator
             $errors[] = 'cLocPrestacao deve ter 7 dígitos (código IBGE)';
         }
 
+        // Alíquota do ISS (pAliq, TSDec1V2): de 0 a 9,99 com até 2 casas decimais.
+        // Aceita 'pAliq' (nome do XSD) ou 'aliquota' (nome usado pelo ERP). Opcional.
+        $pAliq = null;
+        $aliquotaInformada = $servico['pAliq'] ?? $servico['aliquota'] ?? null;
+        if ($aliquotaInformada !== null && $aliquotaInformada !== '') {
+            if (!is_numeric($aliquotaInformada) || (float) $aliquotaInformada < 0 || (float) $aliquotaInformada > 9.99) {
+                $errors[] = 'Alíquota do ISS (pAliq) deve ser numérica, entre 0 e 9,99';
+            } else {
+                $pAliq = number_format(round((float) $aliquotaInformada, 2), 2, '.', '');
+            }
+        }
+        unset($servico['pAliq'], $servico['aliquota']);
+
         $this->lancarSeHouver($errors, 'serviço');
 
         return array_merge($servico, [
@@ -179,6 +192,7 @@ class DpsValidator
             'valorServicos' => round($valorServicos, 2),
             'issRetido' => $issRetido,
             'tribISSQN' => $tribISSQN,
+            'pAliq' => $pAliq,
             'cLocPrestacao' => $cLocPrestacao,
         ]);
     }

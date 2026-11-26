@@ -7,6 +7,19 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [2.0.1] - 2026-11-26
+
+### Adicionado
+
+- Alíquota do ISS (`pAliq`) na DPS. Informe em `setServico()` com a chave `aliquota` (nome usado pelo ERP) ou `pAliq` (nome do XSD), em percentual de 0 a 9,99 com até 2 casas decimais. Opcional no leiaute; obrigatória para municípios fora do Sistema Nacional.
+- Uma nova chamada de `setServico()` com alíquota substitui a anterior.
+
+### Corrigido
+
+- Chaves desconhecidas em `setIdentificacao()` e `setServico()` (ex.: `tipo`, `valorIss`, `natOp`) continuam sendo ignoradas, agora com teste de regressão.
+
+---
+
 ## [2.0.0] - 2026-11-26
 
 ### Alterado (Breaking Changes)

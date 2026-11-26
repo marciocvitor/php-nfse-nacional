@@ -189,4 +189,95 @@ class MakeDpsTest extends TestCase
             ->setServico($this->servico());
         $make->getDPSXML();
     }
+
+    public function testAliquotaIssEmitePAliqValidaContraSchema(): void
+    {
+        $xml = $this->montar()->setServico(['aliquota' => 5.0])->getDPSXML();
+
+        $this->assertSchemaValido($xml);
+        $this->assertStringContainsString('<pAliq>5.00</pAliq>', $xml);
+    }
+
+    public function testAliquotaComQuatroCasasEhNormalizadaParaDuas(): void
+    {
+        // O ERP envia a alíquota com number_format(…, 4): "5.0000"
+        $xml = $this->montar()->setServico(['aliquota' => '5.0000'])->getDPSXML();
+
+        $this->assertSchemaValido($xml);
+        $this->assertStringContainsString('<pAliq>5.00</pAliq>', $xml);
+    }
+
+    public function testPAliqPodeSerInformadoPeloNomeDoXsd(): void
+    {
+        $xml = $this->montar()->setServico(['pAliq' => 3.5])->getDPSXML();
+
+        $this->assertSchemaValido($xml);
+        $this->assertStringContainsString('<pAliq>3.50</pAliq>', $xml);
+    }
+
+    public function testSemAliquotaNaoEmitePAliq(): void
+    {
+        $xml = $this->montar()->getDPSXML();
+
+        $this->assertSchemaValido($xml);
+        $this->assertStringNotContainsString('pAliq', $xml);
+    }
+
+    public function testAliquotaAcimaDeNoveVirgulaNoveNoveLancaErro(): void
+    {
+        // TSDec1V2 aceita no máximo 9,99
+        $this->expectException(ValidationException::class);
+        $this->montar()->setServico(['aliquota' => 10]);
+    }
+
+    public function testAliquotaNegativaOuNaoNumericaLancaErro(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->montar()->setServico(['aliquota' => 'abc']);
+    }
+
+    public function testNovaAliquotaSubstituiAAnterior(): void
+    {
+        $make = $this->montar()->setServico(['aliquota' => 5.0]);
+        $make->setServico(['aliquota' => 2.5]);
+        $xml = $make->getDPSXML();
+
+        $this->assertSchemaValido($xml);
+        $this->assertStringContainsString('<pAliq>2.50</pAliq>', $xml);
+        $this->assertStringNotContainsString('<pAliq>5.00</pAliq>', $xml);
+    }
+
+    public function testPAliqSubstituiAliquotaAnteriorPeloNomeDoXsd(): void
+    {
+        $make = $this->montar()->setServico(['aliquota' => 5.0]);
+        $make->setServico(['pAliq' => 3.0]);
+        $xml = $make->getDPSXML();
+
+        $this->assertSchemaValido($xml);
+        $this->assertStringContainsString('<pAliq>3.00</pAliq>', $xml);
+    }
+
+    public function testChamadaSemAliquotaMantemAAliquotaAnterior(): void
+    {
+        $make = $this->montar()->setServico(['aliquota' => 4.0]);
+        $make->setServico(['valorServicos' => 250.0]);
+        $xml = $make->getDPSXML();
+
+        $this->assertStringContainsString('<pAliq>4.00</pAliq>', $xml);
+    }
+
+    public function testChavesDesconhecidasDoErpSaoIgnoradasSemErro(): void
+    {
+        // O ERP ainda envia estas chaves; a v2 não pode falhar por causa delas
+        $xml = $this->montar()->setServico([
+            'itemListaServico' => '01.07',
+            'valorIss' => 50.0,
+            'natOp' => 1,
+        ])->getDPSXML();
+
+        $this->assertSchemaValido($xml);
+        $this->assertStringNotContainsString('valorIss', $xml);
+        $this->assertStringNotContainsString('natOp', $xml);
+        $this->assertStringNotContainsString('itemListaServico', $xml);
+    }
 }
