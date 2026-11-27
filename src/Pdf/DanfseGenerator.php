@@ -10,6 +10,9 @@ use TCPDF;
 /**
  * Gerador de DANFSe (Documento Auxiliar da Nota Fiscal de Serviço Eletrônica) em PDF
  *
+ * Lê o XML no formato ABRASF (NumeroNfse, CodigoVerificacao, Prestador...), não o da NFS-e Nacional.
+ *
+ * @deprecated Para a NFS-e Nacional use DanfseGeneratorNacional (ou Tools::obterDanfse()).
  * @package NFSeNacional\Pdf
  */
 class DanfseGenerator
@@ -51,7 +54,9 @@ class DanfseGenerator
     public function gerarArquivo(Response $response, string $caminho, array $dadosAdicionais = []): void
     {
         $pdfContent = $this->gerar($response, $dadosAdicionais);
-        file_put_contents($caminho, $pdfContent);
+        if (file_put_contents($caminho, $pdfContent) === false) {
+            throw new \RuntimeException("Não foi possível gravar o DANFSe em {$caminho}");
+        }
     }
 
     /**
@@ -188,7 +193,8 @@ class DanfseGenerator
         $servico = $dados['servico'] ?? [];
 
         $this->pdf->SetXY(10, $y);
-        $this->pdf->Cell(95, 6, 'Valor dos Serviços: ' . $this->formatarMoeda($servico['valorServicos'] ?? 0), 0, 0, 'L');
+        $valorServicos = $this->formatarMoeda($servico['valorServicos'] ?? 0);
+        $this->pdf->Cell(95, 6, 'Valor dos Serviços: ' . $valorServicos, 0, 0, 'L');
         $this->pdf->Cell(95, 6, 'Alíquota: ' . $this->formatarPercentual($servico['aliquota'] ?? 0), 0, 1, 'L');
 
         $y += 6;
@@ -218,7 +224,8 @@ class DanfseGenerator
 
         $y += 5;
         $this->pdf->SetXY(10, $y);
-        $this->pdf->Cell(190, 5, 'Este documento é uma representação gráfica da NFSe e não substitui o XML original.', 0, 1, 'C');
+        $aviso = 'Este documento é uma representação gráfica da NFSe e não substitui o XML original.';
+        $this->pdf->Cell(190, 5, $aviso, 0, 1, 'C');
     }
 
     private function extrairDados(string $xml): array
@@ -254,10 +261,11 @@ class DanfseGenerator
             $prestador = $prestadorNode[0];
             $cnpjNode = $prestador->xpath('.//Cnpj');
             $imNode = $prestador->xpath('.//InscricaoMunicipal');
+            $razaoNode = $prestador->xpath('.//RazaoSocial');
             $dados['prestador'] = [
                 'cnpj' => !empty($cnpjNode) ? (string) $cnpjNode[0] : '',
                 'im' => !empty($imNode) ? (string) $imNode[0] : '',
-                'razaoSocial' => $dados['prestador']['razaoSocial'] ?? ''
+                'razaoSocial' => !empty($razaoNode) ? (string) $razaoNode[0] : '',
             ];
         }
 
@@ -301,7 +309,7 @@ class DanfseGenerator
         if (strlen($cnpj) !== 14) {
             return $cnpj;
         }
-        return substr($cnpj, 0, 2) . '.' . substr($cnpj, 2, 3) . '.' . substr($cnpj, 5, 3) . '/' . substr($cnpj, 8, 4) . '-' . substr($cnpj, 12, 2);
+        return (string) preg_replace('/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/', '$1.$2.$3/$4-$5', $cnpj);
     }
 
     private function formatarCpf(string $cpf): string

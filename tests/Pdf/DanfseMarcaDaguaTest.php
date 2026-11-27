@@ -68,7 +68,8 @@ class DanfseMarcaDaguaTest extends TestCase
         // A marca é desenhada na mesma página do DANFSe; o documento continua com uma página
         foreach ([false, true] as $canceled) {
             $pdf = $this->gerar($canceled);
-            $this->assertSame(1, preg_match_all('/\/Type\s*\/Page\b(?!s)/', $pdf), "canceled=" . var_export($canceled, true));
+            $paginas = preg_match_all('/\/Type\s*\/Page\b(?!s)/', $pdf);
+            $this->assertSame(1, $paginas, 'canceled=' . var_export($canceled, true));
         }
     }
 

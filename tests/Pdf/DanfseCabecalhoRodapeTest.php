@@ -128,7 +128,8 @@ class DanfseCabecalhoRodapeTest extends TestCase
 
     public function testUfDoMunicipioVemDoEnderecoDoEmitenteNoXml(): void
     {
-        $xml = str_replace('<emit>', '<emit><enderNac><xLgr>Rua A</xLgr><UF>MG</UF></enderNac>', DanfseXmlFixture::NFSE);
+        $enderecoMg = '<emit><enderNac><xLgr>Rua A</xLgr><UF>MG</UF></enderNac>';
+        $xml = str_replace('<emit>', $enderecoMg, DanfseXmlFixture::NFSE);
         $this->assertNotSame(DanfseXmlFixture::NFSE, $xml, 'o fixture deve conter <emit>');
 
         $dados = $this->dados($xml);
@@ -151,7 +152,10 @@ class DanfseCabecalhoRodapeTest extends TestCase
         $html = $this->cabecalho();
 
         $this->assertStringNotContainsString('Prefeitura Municipal', $html);
-        $this->assertFalse(method_exists(DanfseGeneratorNacional::class, 'setBrasao'), 'a opção de brasão foi removida');
+        $this->assertFalse(
+            method_exists(DanfseGeneratorNacional::class, 'setBrasao'),
+            'a opção de brasão foi removida'
+        );
     }
 
     // ---- rodapé: faixa de cientificação e assinatura -----------------------------------------
@@ -188,6 +192,9 @@ class DanfseCabecalhoRodapeTest extends TestCase
     {
         $html = $this->chamar(new DanfseGeneratorNacional(), 'renderizarInformacoesComplementares', $this->dados());
 
-        $this->assertStringContainsString('Totais aproximados dos Tributos cfe. Lei n° 12.741/2012: Federais: -; Estaduais: -; Municipais: -;', $html);
+        $this->assertStringContainsString(
+            'Totais aproximados dos Tributos cfe. Lei n° 12.741/2012: Federais: -; Estaduais: -; Municipais: -;',
+            $html
+        );
     }
 }

@@ -18,6 +18,8 @@ class Config
     public readonly string $certPassword;
     public readonly bool $validarSchemas;
     public readonly ?string $apiBaseUrl; // URL base da API REST (opcional, usa padrão se não informado)
+    /** Verifica o certificado TLS dos servidores da API (padrão true; desligue só para depuração). */
+    public readonly bool $verificarSsl;
 
     /**
      * Cria uma instância de Config a partir de um array
@@ -33,7 +35,8 @@ class Config
             certPfx: $data['certPfx'] ?? '',
             certPassword: $data['certPassword'] ?? '',
             validarSchemas: $data['validarSchemas'] ?? true,
-            apiBaseUrl: $data['apiBaseUrl'] ?? null
+            apiBaseUrl: $data['apiBaseUrl'] ?? null,
+            verificarSsl: (bool) ($data['verificarSsl'] ?? true)
         );
     }
 
@@ -49,7 +52,8 @@ class Config
         string|array $certPfx,
         string $certPassword,
         bool $validarSchemas,
-        ?string $apiBaseUrl
+        ?string $apiBaseUrl,
+        bool $verificarSsl
     ) {
         $this->cnpj = $cnpj;
         $this->im = $im;
@@ -60,6 +64,7 @@ class Config
         $this->certPassword = $certPassword;
         $this->validarSchemas = $validarSchemas;
         $this->apiBaseUrl = $apiBaseUrl;
+        $this->verificarSsl = $verificarSsl;
     }
 
     /**
@@ -78,7 +83,7 @@ class Config
         // URLs oficiais do Portal Nacional de NFSe
         // Conforme documentação oficial e relatos de usuários
         // O endpoint correto é sefin.producaorestrita.nfse.gov.br/sefinnacional/
-        if ($this->ambiente == 1) {
+        if ($this->ambiente === 1) {
             // Produção
             return 'https://sefin.nfse.gov.br';
         } else {
@@ -100,7 +105,7 @@ class Config
         // CORREÇÃO: O endpoint /danfse/ usa URL diferente (adn.nfse.gov.br) e não precisa de /sefinnacional/
         // Endpoint correto: https://adn.nfse.gov.br/danfse/{chaveAcesso}
         if (str_starts_with($endpoint, 'danfse/')) {
-            if ($this->ambiente == 1) {
+            if ($this->ambiente === 1) {
                 // Produção
                 return 'https://adn.nfse.gov.br/' . $endpoint;
             } else {
@@ -117,7 +122,7 @@ class Config
         // Produção: https://sefin.nfse.gov.br/sefinnacional/nfse (sem /API/)
         // Conforme documentação: https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/
 
-        if ($this->ambiente == 1) {
+        if ($this->ambiente === 1) {
             // Produção: /sefinnacional/ (minúsculo)
             if (!str_starts_with($endpoint, 'sefinnacional/')) {
                 $endpoint = 'sefinnacional/' . $endpoint;
@@ -137,6 +142,6 @@ class Config
      */
     public function ambienteNome(): string
     {
-        return $this->ambiente == 1 ? 'Produção' : 'Homologação';
+        return $this->ambiente === 1 ? 'Produção' : 'Homologação';
     }
 }

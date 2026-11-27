@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace NFSeNacional\Pdf;
 
-use NFSeNacional\Common\Response;
 use Mpdf\Mpdf;
+use Mpdf\WatermarkText;
+use NFSeNacional\Common\Response;
 
 /**
  * Gerador de DANFSe (Documento Auxiliar da Nota Fiscal de Serviço Eletrônica) em PDF
@@ -31,11 +32,10 @@ class DanfseGeneratorNacional
     /** Consulta pública da NFS-e (conteúdo do QR Code). */
     private const URL_CONSULTA_PUBLICA = 'https://www.nfse.gov.br/ConsultaPublica/?tpc=1&chave=';
 
-    private Mpdf $pdf;
-
-    public function __construct()
+    /** Cria um documento mPDF novo para cada DANFSe, para que a mesma instância possa gerar vários PDFs. */
+    private function novoDocumento(): Mpdf
     {
-        $this->pdf = new Mpdf([
+        $pdf = new Mpdf([
             'mode' => 'utf-8',
             'format' => 'A4',
             'margin_top' => 3,
@@ -45,13 +45,15 @@ class DanfseGeneratorNacional
             'margin_header' => 0,
             'margin_footer' => 3,
             'tempDir' => sys_get_temp_dir(),
-            'ignore_invalid_utf8' => false, // Não ignorar UTF-8 inválido, converter corretamente
-            'autoPageBreak' => false, // Desabilita quebra automática de página
+            'ignore_invalid_utf8' => false,
+            'autoPageBreak' => false, // o DANFSe ocupa uma única página
         ]);
 
-        $this->pdf->SetTitle('DANFSe - Documento Auxiliar da NFSe');
-        $this->pdf->SetAuthor('PHP NFSe Nacional');
-        $this->pdf->SetCreator('PHP NFSe Nacional');
+        $pdf->SetTitle('DANFSe - Documento Auxiliar da NFS-e');
+        $pdf->SetAuthor('PHP NFSe Nacional');
+        $pdf->SetCreator('PHP NFSe Nacional');
+
+        return $pdf;
     }
 
     /** Data URI de uma imagem embutida em src/Pdf/imagens/; vazio se o arquivo não existir. */
@@ -75,7 +77,8 @@ class DanfseGeneratorNacional
             // QR seja sempre gerado (PDF reprodutível) e depois devolvemos o gerador a uma semente aleatória.
             mt_srand(crc32($chaveAcesso));
             try {
-                $codigo = (new \TCPDF2DBarcode(self::URL_CONSULTA_PUBLICA . $chaveAcesso, 'QRCODE,M'))->getBarcodeArray();
+                $url = self::URL_CONSULTA_PUBLICA . $chaveAcesso;
+                $codigo = (new \TCPDF2DBarcode($url, 'QRCODE,M'))->getBarcodeArray();
             } finally {
                 mt_srand();
             }
@@ -102,8 +105,11 @@ class DanfseGeneratorNacional
             }
 
             ob_start();
-            imagepng($imagem, null, 9);
-            $png = (string) ob_get_clean();
+            try {
+                imagepng($imagem, null, 9);
+            } finally {
+                $png = (string) ob_get_clean();
+            }
         } catch (\Throwable) {
             return '';
         }
@@ -133,17 +139,18 @@ class DanfseGeneratorNacional
 
         // A marca d'água é configurada no mesmo mPDF que monta o DANFSe, antes do WriteHTML
         // (que cria a página); não se reabre o PDF pronto para carimbar.
-        $this->pdf->showWatermarkText = $canceled;
+        $pdf = $this->novoDocumento();
+        $pdf->showWatermarkText = $canceled;
         if ($canceled) {
-            $this->pdf->SetWatermarkText(new \Mpdf\WatermarkText('CANCELADA', 120, 50, '#fb0000', 0.4));
+            $pdf->SetWatermarkText(new WatermarkText('CANCELADA', 120, 50, '#fb0000', 0.4));
         }
 
         // Rodapé fixo no fim da página (faixa de cientificação/assinatura do layout de referência)
-        $this->pdf->SetHTMLFooter($this->renderizarRodape($dados));
+        $pdf->SetHTMLFooter($this->renderizarRodape($dados));
 
-        $this->pdf->WriteHTML($html);
+        $pdf->WriteHTML($html);
 
-        return $this->pdf->Output('', 'S');
+        return $pdf->Output('', 'S');
     }
 
     /**
@@ -152,7 +159,9 @@ class DanfseGeneratorNacional
     private function gerarHTML(array $dados): string
     {
         $css = $this->getCSS();
-        $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">' . $css . '</head><body style="margin: 0; padding: 0;">';
+        $html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+            . '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">'
+            . $css . '</head><body style="margin: 0; padding: 0;">';
 
         // Cabeçalho
         $html .= $this->renderizarCabecalho($dados);
@@ -187,6 +196,15 @@ class DanfseGeneratorNacional
     }
 
     /**
+     * Escapa texto vindo do XML ou de $dadosAdicionais antes de inseri-lo no HTML do PDF
+     * (impede marcação HTML, como <img src="http://...">, de ser interpretada pelo mPDF).
+     */
+    private function escapar(string $texto): string
+    {
+        return htmlspecialchars($texto, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    /**
      * CSS para o PDF - Otimizado para caber em uma página
      */
     private function getCSS(): string
@@ -198,14 +216,6 @@ class DanfseGeneratorNacional
                 color: #000;
                 margin: 0;
                 padding: 0;
-            }
-            .header {
-                background-color: #e0e0e0;
-                padding: 4px;
-                text-align: center;
-                font-weight: bold;
-                font-size: 9pt;
-                margin-bottom: 3px;
             }
             table.cab td {
                 border: 0;
@@ -247,14 +257,6 @@ class DanfseGeneratorNacional
             }
             .label {
                 font-weight: bold;
-            }
-            .footer {
-                margin-top: 5px;
-                padding-top: 3px;
-                border-top: 1px solid #ccc;
-                font-size: 7pt;
-                text-align: center;
-                color: #666;
             }
             .valor {
                 text-align: right;
@@ -311,27 +313,30 @@ class DanfseGeneratorNacional
         }
         $html .= '</td>';
 
-        $html .= '<td style="width: 31%; text-align: center; vertical-align: middle; font-weight: bold; font-size: 9pt;">';
+        $html .= '<td style="width: 31%; text-align: center; vertical-align: middle;'
+            . ' font-weight: bold; font-size: 9pt;">';
         $html .= 'DANFSe ' . self::VERSAO_LAYOUT . '<br>Documento Auxiliar da NFS-e';
         $html .= '</td>';
 
         $html .= '<td style="width: 30%; vertical-align: middle; padding: 3px 4px; font-size: 7pt;">';
-        $html .= '<strong>Município: ' . htmlspecialchars($municipioUf, ENT_QUOTES, 'UTF-8') . '</strong><br>';
-        $html .= 'Ambiente Gerador: ' . htmlspecialchars($ambienteGerador, ENT_QUOTES, 'UTF-8') . '<br>';
-        $html .= 'Tipo de Ambiente: ' . htmlspecialchars($tipoAmbiente, ENT_QUOTES, 'UTF-8');
+        $html .= '<strong>Município: ' . $this->escapar($municipioUf) . '</strong><br>';
+        $html .= 'Ambiente Gerador: ' . $this->escapar($ambienteGerador) . '<br>';
+        $html .= 'Tipo de Ambiente: ' . $this->escapar($tipoAmbiente);
         $html .= '</td>';
 
         $html .= '<td style="width: 12%; text-align: center; vertical-align: middle; padding: 2px;">';
         if ($qrCode !== '') {
             $html .= '<img src="' . $qrCode . '" style="width: 18mm; height: 18mm;" /><br>';
-            $html .= '<span style="font-size: 4.5pt;">A autenticidade desta NFS-e pode ser verificada pela leitura deste código QR ou pela consulta da chave de acesso no portal nacional da NFS-e</span>';
+            $html .= '<span style="font-size: 4.5pt;">A autenticidade desta NFS-e pode ser verificada'
+                . ' pela leitura deste código QR ou pela consulta da chave de acesso no portal nacional'
+                . ' da NFS-e</span>';
         }
         $html .= '</td>';
 
         $html .= '</tr></table>';
 
         $html .= '<div class="chave-acesso">';
-        $html .= 'Chave de Acesso da NFS-e: ' . $chaveAcesso;
+        $html .= 'Chave de Acesso da NFS-e: ' . $this->escapar((string) $chaveAcesso);
         $html .= '</div>';
 
         return $html;
@@ -356,9 +361,9 @@ class DanfseGeneratorNacional
         $html .= '<th>Data e Hora da emissão da NFS-e</th>';
         $html .= '</tr>';
         $html .= '<tr>';
-        $html .= '<td class="text-center">' . $numero . '</td>';
-        $html .= '<td class="text-center">' . $competencia . '</td>';
-        $html .= '<td class="text-center">' . $dataEmissao . '</td>';
+        $html .= '<td class="text-center">' . $this->escapar((string) $numero) . '</td>';
+        $html .= '<td class="text-center">' . $this->escapar($competencia) . '</td>';
+        $html .= '<td class="text-center">' . $this->escapar($dataEmissao) . '</td>';
         $html .= '</tr>';
         $html .= '<tr>';
         $html .= '<th>Número da DPS</th>';
@@ -366,9 +371,9 @@ class DanfseGeneratorNacional
         $html .= '<th>Data e Hora da emissão da DPS</th>';
         $html .= '</tr>';
         $html .= '<tr>';
-        $html .= '<td class="text-center">' . $numeroDps . '</td>';
-        $html .= '<td class="text-center">' . $serieDps . '</td>';
-        $html .= '<td class="text-center">' . $dataEmissaoDps . '</td>';
+        $html .= '<td class="text-center">' . $this->escapar((string) $numeroDps) . '</td>';
+        $html .= '<td class="text-center">' . $this->escapar((string) $serieDps) . '</td>';
+        $html .= '<td class="text-center">' . $this->escapar($dataEmissaoDps) . '</td>';
         $html .= '</tr>';
         $html .= '</table>';
 
@@ -388,39 +393,17 @@ class DanfseGeneratorNacional
         $email = $prestador['email'] ?? '---';
         $endereco = $this->formatarEndereco($prestador['endereco'] ?? []);
         $municipio = $prestador['municipio'] ?? '---';
-        if ($municipio === '---' && !empty($prestador['endereco']['cMun'])) {
-            // Se não encontrou nome, usar código IBGE + UF
-            $municipio = $prestador['endereco']['cMun'] . ' - ' . ($prestador['endereco']['UF'] ?? '');
-        }
-        $regime = $prestador['regimeTributario'] ?? '---';
-
-        // Se o regime não foi extraído do XML, tentar determinar a partir dos dados adicionais
-        if ($regime === '---' && isset($dadosAdicionais['prestador_opSimpNac'])) {
-            $opSimpNac = $dadosAdicionais['prestador_opSimpNac'] ?? '';
-            $regApTribSN = $dadosAdicionais['prestador_regApTribSN'] ?? '';
-
-            if ($opSimpNac == '3') {
-                $regime = 'Simples Nacional';
-                if ($regApTribSN == '1') {
-                    $regime .= ' - Regime de Apuração Tributária pelo SN';
-                }
-            } elseif ($opSimpNac == '1') {
-                $regime = 'Não Optante pelo Simples Nacional';
-            } elseif ($opSimpNac == '2') {
-                $regime = 'Optante pelo Simples Nacional';
-            }
-        }
 
         $html = '<div class="section-title">EMITENTE DA NFS-e (Prestador do Serviço)</div>';
         $html .= '<table>';
-        $html .= '<tr><td class="label" style="width: 35%;">CNPJ/CPF/NIF:</td><td>' . htmlspecialchars($cnpj, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        $html .= '<tr><td class="label">Inscrição Municipal:</td><td>' . htmlspecialchars($im, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        $html .= '<tr><td class="label">Telefone:</td><td>' . htmlspecialchars($fone, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        $html .= '<tr><td class="label">Nome / Nome Empresarial:</td><td>' . htmlspecialchars($razao, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        $html .= '<tr><td class="label">E-mail:</td><td>' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        $html .= '<tr><td class="label">Endereço:</td><td>' . htmlspecialchars($endereco, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        $html .= '<tr><td class="label">Município:</td><td>' . htmlspecialchars($municipio, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        // Removido campo "Regime Tributário" conforme solicitado
+        $html .= '<tr><td class="label" style="width: 35%;">CNPJ/CPF/NIF:</td>'
+            . '<td>' . $this->escapar($cnpj) . '</td></tr>';
+        $html .= '<tr><td class="label">Inscrição Municipal:</td><td>' . $this->escapar($im) . '</td></tr>';
+        $html .= '<tr><td class="label">Telefone:</td><td>' . $this->escapar($fone) . '</td></tr>';
+        $html .= '<tr><td class="label">Nome / Nome Empresarial:</td><td>' . $this->escapar($razao) . '</td></tr>';
+        $html .= '<tr><td class="label">E-mail:</td><td>' . $this->escapar($email) . '</td></tr>';
+        $html .= '<tr><td class="label">Endereço:</td><td>' . $this->escapar($endereco) . '</td></tr>';
+        $html .= '<tr><td class="label">Município:</td><td>' . $this->escapar($municipio) . '</td></tr>';
         $html .= '</table>';
 
         return $html;
@@ -441,11 +424,12 @@ class DanfseGeneratorNacional
 
         $html = '<div class="section-title">TOMADOR DO SERVIÇO</div>';
         $html .= '<table>';
-        $html .= '<tr><td class="label" style="width: 35%;">CNPJ/CPF:</td><td>' . htmlspecialchars($docFormatado, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        $html .= '<tr><td class="label">Nome / Nome Empresarial:</td><td>' . htmlspecialchars($razao, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        $html .= '<tr><td class="label">E-mail:</td><td>' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        $html .= '<tr><td class="label">Telefone:</td><td>' . htmlspecialchars($fone, ENT_QUOTES, 'UTF-8') . '</td></tr>';
-        $html .= '<tr><td class="label">Endereço:</td><td>' . htmlspecialchars($endereco, ENT_QUOTES, 'UTF-8') . '</td></tr>';
+        $html .= '<tr><td class="label" style="width: 35%;">CNPJ/CPF:</td>'
+            . '<td>' . $this->escapar($docFormatado) . '</td></tr>';
+        $html .= '<tr><td class="label">Nome / Nome Empresarial:</td><td>' . $this->escapar($razao) . '</td></tr>';
+        $html .= '<tr><td class="label">E-mail:</td><td>' . $this->escapar($email) . '</td></tr>';
+        $html .= '<tr><td class="label">Telefone:</td><td>' . $this->escapar($fone) . '</td></tr>';
+        $html .= '<tr><td class="label">Endereço:</td><td>' . $this->escapar($endereco) . '</td></tr>';
         $html .= '</table>';
 
         return $html;
@@ -461,7 +445,6 @@ class DanfseGeneratorNacional
         $cTribMun = $servico['cTribMun'] ?? $servico['cTribMunicipal'] ?? '---';
         $xDescServ = $servico['xDescServ'] ?? $servico['discriminacao'] ?? '---';
         $localPrestacao = $servico['localPrestacao'] ?? '---';
-        $nbs = $servico['cNBS'] ?? $servico['nbs'] ?? '---';
 
         $html = '<div class="section-title">SERVIÇO PRESTADO</div>';
         $html .= '<table>';
@@ -471,12 +454,13 @@ class DanfseGeneratorNacional
         $html .= '<th>Local da Prestação</th>';
         $html .= '</tr>';
         $html .= '<tr>';
-        $html .= '<td class="text-center">' . htmlspecialchars($cTribNac, ENT_QUOTES, 'UTF-8') . '</td>';
-        $html .= '<td class="text-center">' . htmlspecialchars($cTribMun, ENT_QUOTES, 'UTF-8') . '</td>';
-        $html .= '<td class="text-center">' . htmlspecialchars($localPrestacao, ENT_QUOTES, 'UTF-8') . '</td>';
+        $html .= '<td class="text-center">' . $this->escapar($cTribNac) . '</td>';
+        $html .= '<td class="text-center">' . $this->escapar($cTribMun) . '</td>';
+        $html .= '<td class="text-center">' . $this->escapar($localPrestacao) . '</td>';
         $html .= '</tr>';
         $html .= '</table>';
-        $html .= '<p style="margin: 1px 0;"><strong>Inscrição do Serviço:</strong> ' . htmlspecialchars($xDescServ, ENT_QUOTES, 'UTF-8') . '</p>';
+        $html .= '<p style="margin: 1px 0;"><strong>Descrição do Serviço:</strong> '
+            . $this->escapar($xDescServ) . '</p>';
 
         return $html;
     }
@@ -587,7 +571,7 @@ class DanfseGeneratorNacional
 
         $html = '<div class="section-title">INFORMAÇÕES COMPLEMENTARES</div>';
         if (!empty($nbs)) {
-            $html .= '<p style="margin: 1px 0;"><strong>NBS:</strong> ' . $nbs . '</p>';
+            $html .= '<p style="margin: 1px 0;"><strong>NBS:</strong> ' . $this->escapar((string) $nbs) . '</p>';
         }
 
         // Linha de totais aproximados dos tributos (Lei 12.741/2012), como no layout de referência
@@ -618,7 +602,7 @@ class DanfseGeneratorNacional
         $html .= '<td style="width: 25%; ' . $celula . '"><strong>DATA CIENTIFICAÇÃO:</strong></td>';
         $html .= '<td style="width: 25%; ' . $celula . '"><strong>IDENTIFICAÇÃO E ASSINATURA</strong></td>';
         $html .= '<td style="width: 50%; ' . $celula . '"><strong>Nº NFS-e / CHAVE NFS-e</strong><br>';
-        $html .= htmlspecialchars($identificacao, ENT_QUOTES, 'UTF-8') . '</td>';
+        $html .= $this->escapar($identificacao) . '</td>';
         $html .= '</tr></table>';
 
         return $html;
@@ -649,24 +633,27 @@ class DanfseGeneratorNacional
             $idNodes = $xpath->query('//sped:infNFSe/@Id | //infNFSe/@Id');
             $dados['chaveAcesso'] = $idNodes->length > 0 ? str_replace('NFS', '', $idNodes->item(0)->nodeValue) : '';
 
-            // Cabeçalho: município emissor (nome e UF), ambiente gerador (infNFSe/ambGer) e tipo de ambiente (infDPS/tpAmb)
+            // Cabeçalho: município emissor (nome e UF), ambiente gerador (infNFSe/ambGer)
+            // e tipo de ambiente (infDPS/tpAmb)
             $xLocEmiNodes = $xpath->query('//sped:infNFSe/sped:xLocEmi | //infNFSe/xLocEmi');
             $dados['municipioEmissor'] = $xLocEmiNodes->length > 0 ? trim($xLocEmiNodes->item(0)->nodeValue) : '';
 
-            $ufEmiNodes = $xpath->query('//sped:infNFSe/sped:emit//sped:UF | //infNFSe/emit//UF');
-            $dados['ufEmissor'] = $ufEmiNodes->length > 0 ? trim($ufEmiNodes->item(0)->nodeValue) : '';
-
-            $ambGerNodes = $xpath->query('//sped:infNFSe/sped:ambGer | //infNFSe/ambGer');
-            $dados['ambienteGerador'] = $ambGerNodes->length > 0 ? trim($ambGerNodes->item(0)->nodeValue) : '';
-
-            $tpAmbNodes = $xpath->query('//sped:infDPS/sped:tpAmb | //infDPS/tpAmb');
-            $dados['tipoAmbiente'] = $tpAmbNodes->length > 0 ? trim($tpAmbNodes->item(0)->nodeValue) : '';
+            $dados['ufEmissor'] = $this->primeiroValor(
+                $xpath,
+                '//sped:infNFSe/sped:emit//sped:UF | //infNFSe/emit//UF'
+            );
+            $dados['ambienteGerador'] = $this->primeiroValor($xpath, '//sped:infNFSe/sped:ambGer | //infNFSe/ambGer');
+            $dados['tipoAmbiente'] = $this->primeiroValor($xpath, '//sped:infDPS/sped:tpAmb | //infDPS/tpAmb');
 
             // Totais aproximados dos tributos (valores/trib/totTrib/vTotTrib), quando informados na DPS
+            $totalTributo = fn (string $campo): string => $this->primeiroValor(
+                $xpath,
+                "//sped:infDPS//sped:vTotTrib/sped:{$campo} | //infDPS//vTotTrib/{$campo}"
+            );
             $dados['totTrib'] = [
-                'federal' => $this->primeiroValor($xpath, '//sped:infDPS//sped:vTotTrib/sped:vTotTribFed | //infDPS//vTotTrib/vTotTribFed'),
-                'estadual' => $this->primeiroValor($xpath, '//sped:infDPS//sped:vTotTrib/sped:vTotTribEst | //infDPS//vTotTrib/vTotTribEst'),
-                'municipal' => $this->primeiroValor($xpath, '//sped:infDPS//sped:vTotTrib/sped:vTotTribMun | //infDPS//vTotTrib/vTotTribMun'),
+                'federal' => $totalTributo('vTotTribFed'),
+                'estadual' => $totalTributo('vTotTribEst'),
+                'municipal' => $totalTributo('vTotTribMun'),
             ];
 
             // Número da NFS-e
@@ -759,9 +746,12 @@ class DanfseGeneratorNacional
                         'CEP' => $this->getNodeValue($xpath, $ender, './/sped:CEP | .//CEP'),
                     ];
 
-                    // Buscar nome do município pelo código IBGE (se disponível)
-                    if (!empty($cMun)) {
-                        $dados['prestador']['municipio'] = $this->buscarNomeMunicipio($cMun, $uf);
+                    if ($cMun !== '') {
+                        $dados['prestador']['municipio'] = $this->descreverMunicipio(
+                            $cMun,
+                            $uf,
+                            $this->nomesDeMunicipiosDoXml($xpath)
+                        );
                     }
                 }
             }
@@ -771,7 +761,8 @@ class DanfseGeneratorNacional
             if ($tomadorNodes->length > 0) {
                 $toma = $tomadorNodes->item(0);
                 $dados['tomador'] = [
-                    'cpfCnpj' => $this->getNodeValue($xpath, $toma, './/sped:CNPJ | .//CNPJ') ?: $this->getNodeValue($xpath, $toma, './/sped:CPF | .//CPF'),
+                    'cpfCnpj' => $this->getNodeValue($xpath, $toma, './/sped:CNPJ | .//CNPJ')
+                        ?: $this->getNodeValue($xpath, $toma, './/sped:CPF | .//CPF'),
                     'xNome' => $this->getNodeValue($xpath, $toma, './/sped:xNome | .//xNome'),
                     'fone' => $this->getNodeValue($xpath, $toma, './/sped:fone | .//fone'),
                     'email' => $this->getNodeValue($xpath, $toma, './/sped:email | .//email'),
@@ -807,7 +798,10 @@ class DanfseGeneratorNacional
                     ];
                 }
 
-                $locPrestNodes = $xpath->query('.//sped:locPrest//sped:cLocPrestacao | .//locPrest//cLocPrestacao', $serv);
+                $locPrestNodes = $xpath->query(
+                    './/sped:locPrest//sped:cLocPrestacao | .//locPrest//cLocPrestacao',
+                    $serv
+                );
                 if ($locPrestNodes->length > 0) {
                     $dados['servico']['localPrestacao'] = trim($locPrestNodes->item(0)->nodeValue);
                 }
@@ -823,7 +817,7 @@ class DanfseGeneratorNacional
                 $dados['vServ'] = (float)$this->getNodeValue($xpath, $valores, './/sped:vServ | .//vServ');
                 $dados['valorServico'] = $dados['vServ'];
 
-                // Fallback: Se não encontrou dentro de valores, tentar busca global (útil quando vServ está dentro de vServPrest ou outros nós)
+                // Sem vServ em valores, busca no documento todo (ex.: vServ dentro de vServPrest ou outros nós)
                 if ($dados['valorServico'] <= 0) {
                     $vServGlobal = $xpath->query('//sped:vServ | //vServ');
                     if ($vServGlobal->length > 0) {
@@ -865,17 +859,26 @@ class DanfseGeneratorNacional
                     if ($tribMunNodes->length > 0) {
                         $tribMun = $tribMunNodes->item(0);
                         $dados['tributacao']['tribMun'] = [
-                            'issRetido' => (int)$this->getNodeValue($xpath, $tribMun, './/sped:tpRetISSQN | .//tpRetISSQN'),
-                            'aliquota' => (float)$this->getNodeValue($xpath, $tribMun, './/sped:pAliq | .//pAliq'),
+                            'issRetido' => (int) $this->getNodeValue(
+                                $xpath,
+                                $tribMun,
+                                './/sped:tpRetISSQN | .//tpRetISSQN'
+                            ),
+                            'aliquota' => (float) $this->getNodeValue($xpath, $tribMun, './/sped:pAliq | .//pAliq'),
                         ];
 
                         // Dados de ISSQN calculados no XML autorizado (infNFSe/valores)
-                        $aliqAplic = (float)$this->getNodeValue($xpath, $valoresNfse, './/sped:pAliqAplic | .//pAliqAplic');
+                        $valorNfse = fn (string $campo): float => (float) $this->getNodeValue(
+                            $xpath,
+                            $valoresNfse,
+                            ".//sped:{$campo} | .//{$campo}"
+                        );
+                        $aliqAplic = $valorNfse('pAliqAplic');
                         if ($aliqAplic > 0) {
                             $dados['tributacao']['tribMun']['aliquota'] = $aliqAplic;
                         }
-                        $dados['tributacao']['tribMun']['bcIssqn'] = (float)$this->getNodeValue($xpath, $valoresNfse, './/sped:vBC | .//vBC');
-                        $dados['tributacao']['tribMun']['issApurado'] = (float)$this->getNodeValue($xpath, $valoresNfse, './/sped:vISSQN | .//vISSQN');
+                        $dados['tributacao']['tribMun']['bcIssqn'] = $valorNfse('vBC');
+                        $dados['tributacao']['tribMun']['issApurado'] = $valorNfse('vISSQN');
                     }
 
                     // Tributação Federal
@@ -886,8 +889,12 @@ class DanfseGeneratorNacional
                         if ($piscofinsNodes->length > 0) {
                             $piscofins = $piscofinsNodes->item(0);
                             $dados['tributacao']['tribFed']['piscofins'] = [
-                                'vPis' => (float)$this->getNodeValue($xpath, $piscofins, './/sped:vPis | .//vPis'),
-                                'vCofins' => (float)$this->getNodeValue($xpath, $piscofins, './/sped:vCofins | .//vCofins'),
+                                'vPis' => (float) $this->getNodeValue($xpath, $piscofins, './/sped:vPis | .//vPis'),
+                                'vCofins' => (float) $this->getNodeValue(
+                                    $xpath,
+                                    $piscofins,
+                                    './/sped:vCofins | .//vCofins'
+                                ),
                             ];
                         }
                     }
@@ -928,35 +935,48 @@ class DanfseGeneratorNacional
     }
 
     /**
-     * Busca nome do município pelo código IBGE
+     * Nomes de município que a própria NFS-e traz, indexados pelo código IBGE:
+     * local de emissão (cLocEmi/xLocEmi), da prestação (cLocPrestacao/xLocPrestacao) e de incidência
+     * (cLocIncid/xLocIncid).
+     *
+     * @return array<string, string>
      */
-    private function buscarNomeMunicipio(string $codigoIBGE, string $uf = ''): string
+    private function nomesDeMunicipiosDoXml(\DOMXPath $xpath): array
     {
-        try {
-            // Tentar buscar do banco de dados se disponível
-            if (class_exists('Db_conn')) {
-                $Db_conn = new \Db_conn();
-                $link = $Db_conn->OpenConnectionNewI();
+        $pares = [
+            ['//sped:infDPS/sped:cLocEmi | //infDPS/cLocEmi', '//sped:infNFSe/sped:xLocEmi | //infNFSe/xLocEmi'],
+            [
+                '//sped:locPrest/sped:cLocPrestacao | //locPrest/cLocPrestacao',
+                '//sped:infNFSe/sped:xLocPrestacao | //infNFSe/xLocPrestacao',
+            ],
+            [
+                '//sped:infNFSe/sped:cLocIncid | //infNFSe/cLocIncid',
+                '//sped:infNFSe/sped:xLocIncid | //infNFSe/xLocIncid',
+            ],
+        ];
 
-                // Tentar buscar na tabela municipio se existir
-                $query = "SELECT m_nome FROM municipio WHERE m_codigo_ibge = '$codigoIBGE' LIMIT 1";
-                $result = $link->query($query);
-                if ($result && $row = $result->fetch_assoc()) {
-                    $nome = $row['m_nome'] ?? '';
-                    if (!empty($nome)) {
-                        $Db_conn->CloseConnectionNewI($link);
-                        return $nome . ($uf ? ' - ' . $uf : '');
-                    }
-                }
-
-                $Db_conn->CloseConnectionNewI($link);
+        $nomes = [];
+        foreach ($pares as [$consultaCodigo, $consultaNome]) {
+            $codigo = $this->primeiroValor($xpath, $consultaCodigo);
+            $nome = $this->primeiroValor($xpath, $consultaNome);
+            if ($codigo !== '' && $nome !== '') {
+                $nomes[$codigo] ??= $nome;
             }
-        } catch (\Exception $e) {
-            // Ignora erros de banco
         }
 
-        // Se não encontrou, retorna código IBGE + UF
-        return $codigoIBGE . ($uf ? ' - ' . $uf : '');
+        return $nomes;
+    }
+
+    /**
+     * Município no formato "Nome - UF"; sem o nome na NFS-e, usa o código IBGE no lugar.
+     *
+     * @param array<string, string> $nomesConhecidos
+     */
+    private function descreverMunicipio(string $codigoIbge, string $uf, array $nomesConhecidos): string
+    {
+        $nome = $nomesConhecidos[$codigoIbge] ?? $codigoIbge;
+
+        return $nome . ($uf !== '' ? ' - ' . $uf : '');
     }
 
     /**
@@ -990,7 +1010,7 @@ class DanfseGeneratorNacional
         if (strlen($cnpj) !== 14) {
             return $cnpj;
         }
-        return substr($cnpj, 0, 2) . '.' . substr($cnpj, 2, 3) . '.' . substr($cnpj, 5, 3) . '/' . substr($cnpj, 8, 4) . '-' . substr($cnpj, 12, 2);
+        return (string) preg_replace('/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/', '$1.$2.$3/$4-$5', $cnpj);
     }
 
     private function formatarCpf(string $cpf): string

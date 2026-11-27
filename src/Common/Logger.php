@@ -55,8 +55,12 @@ class Logger
     /**
      * Registra envio de DPS
      */
-    public function logEnvioDps(string $numeroDps, bool $sucesso, ?string $numeroNfse = null, ?string $erro = null): void
-    {
+    public function logEnvioDps(
+        string $numeroDps,
+        bool $sucesso,
+        ?string $numeroNfse = null,
+        ?string $erro = null
+    ): void {
         $mensagem = $sucesso
             ? "DPS enviado com sucesso. NFSe: {$numeroNfse}"
             : "Falha ao enviar DPS. Erro: {$erro}";

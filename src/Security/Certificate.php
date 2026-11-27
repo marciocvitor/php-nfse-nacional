@@ -18,8 +18,13 @@ class Certificate
     private array $meta;
     private array $extraCerts = []; // Certificados intermediários da cadeia
 
-    private function __construct(string $certificate, string $privateKey, string $passphrase, array $meta, array $extraCerts = [])
-    {
+    private function __construct(
+        string $certificate,
+        string $privateKey,
+        string $passphrase,
+        array $meta,
+        array $extraCerts = []
+    ) {
         $this->certificate = $certificate;
         $this->privateKey = $privateKey;
         $this->passphrase = $passphrase;
@@ -149,6 +154,8 @@ class Certificate
             throw new CertificateException('Não foi possível criar arquivo temporário para o PEM');
         }
 
+        // O PEM contém a chave privada sem senha: só o dono do processo pode ler o arquivo
+        chmod($tmpFile, 0600);
         if (file_put_contents($tmpFile, $pemContent) === false) {
             throw new CertificateException('Falha ao escrever arquivo PEM temporário');
         }

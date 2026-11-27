@@ -29,7 +29,8 @@ class DanfseApiIndisponivelTest extends TestCase
 {
     private const CHAVE = '35503082' . '11222333000181' . '0000000000000000000000000001';
 
-    private const TLS_ERRO = 'cURL error 56: OpenSSL SSL_read: error:0A000410:SSL routines::sslv3 alert handshake failure, errno 10054';
+    private const TLS_ERRO = 'cURL error 56: OpenSSL SSL_read: error:0A000410:SSL routines::'
+        . 'sslv3 alert handshake failure, errno 10054';
 
     private ?string $pem = null;
 
@@ -71,7 +72,9 @@ class DanfseApiIndisponivelTest extends TestCase
 
     private function erroTls(): ConnectException
     {
-        return new ConnectException(self::TLS_ERRO, new Request('GET', 'https://adn.producaorestrita.nfse.gov.br/danfse/x'));
+        $requisicao = new Request('GET', 'https://adn.producaorestrita.nfse.gov.br/danfse/x');
+
+        return new ConnectException(self::TLS_ERRO, $requisicao);
     }
 
     public function testFalhaDeHandshakeTlsViraDanfseIndisponivel(): void
@@ -164,7 +167,8 @@ class DanfseApiIndisponivelTest extends TestCase
 
     public function testPdfValidoContinuaSendoRetornado(): void
     {
-        [$tools] = $this->criarTools([new HttpResponse(200, ['Content-Type' => 'application/pdf'], '%PDF-1.7 conteudo')]);
+        $pdf = new HttpResponse(200, ['Content-Type' => 'application/pdf'], '%PDF-1.7 conteudo');
+        [$tools] = $this->criarTools([$pdf]);
 
         $this->assertSame('%PDF-1.7 conteudo', $tools->baixarDanfse(self::CHAVE));
     }

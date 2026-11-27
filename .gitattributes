@@ -1,0 +1,17 @@
+# Fim de linha LF no repositório e na cópia de trabalho (PSR-12)
+* text=auto eol=lf
+
+*.png binary
+*.pdf binary
+*.pfx binary
+*.p12 binary
+
+# Fora do pacote instalado pelo Composer (--prefer-dist)
+/.github export-ignore
+/tests export-ignore
+/examples export-ignore
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/phpunit.xml.dist export-ignore
+/phpcs.xml.dist export-ignore
+/phpstan.neon.dist export-ignore

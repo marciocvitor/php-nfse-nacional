@@ -88,6 +88,8 @@ $config = Config::fromArray([
     'certPassword' => 'senha',
     // apiBaseUrl é opcional - usa padrão se não informado
     // 'apiBaseUrl' => 'https://sefin.producaorestrita.nfse.gov.br'
+    // verificarSsl é opcional (padrão true, também em homologação); false só para depuração
+    // 'verificarSsl' => false,
 ]);
 
 $tools = new Tools($config);

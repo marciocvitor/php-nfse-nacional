@@ -39,8 +39,11 @@ class CancelamentoXmlTest extends TestCase
     }
 
     /** @return array{xml: string, idEvento: string} */
-    private function gerar(string $chave = self::CHAVE, string $motivo = 'Serviço não prestado conforme contrato', int $cMotivo = 2): array
-    {
+    private function gerar(
+        string $chave = self::CHAVE,
+        string $motivo = 'Serviço não prestado conforme contrato',
+        int $cMotivo = 2
+    ): array {
         $metodo = new ReflectionMethod(Tools::class, 'gerarXmlEventoCancelamento');
         $metodo->setAccessible(true);
 

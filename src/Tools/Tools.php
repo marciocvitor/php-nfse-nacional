@@ -18,6 +18,7 @@ use NFSeNacional\Validator\SchemaType;
 use NFSeNacional\Validator\SchemaValidator;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\BadResponseException;
+use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Exception\TransferException;
 use GuzzleHttp\RequestOptions;
 use Throwable;
@@ -30,6 +31,26 @@ use Throwable;
  */
 class Tools
 {
+    /** Orientações acrescentadas às mensagens de erros comuns da SEFIN Nacional. */
+    private const ORIENTACOES_ERRO = [
+        'E0715' => "\n\nIMPORTANTE: Erro de validação do certificado digital."
+            . "\nPossíveis causas:"
+            . "\n1. Certificado revogado ou expirado"
+            . "\n2. Servidor de revogação do Portal Nacional temporariamente offline"
+            . "\n3. Cadeia de certificação incompleta"
+            . "\n\nSoluções:"
+            . "\n- Verifique se o certificado está válido e não expirado"
+            . "\n- Aguarde alguns minutos e tente novamente (pode ser problema temporário)"
+            . "\n- Verifique se o certificado está configurado corretamente"
+            . "\n- Entre em contato com a autoridade certificadora se o problema persistir",
+        'E0310' => "\n\nIMPORTANTE: O código de tributação nacional informado não existe na lista oficial"
+            . ' do Portal Nacional.'
+            . "\nVerifique:"
+            . "\n1. Se o código LC116 está correto e ativo"
+            . "\n2. Se o código está na lista oficial do Portal Nacional"
+            . "\n3. Se o código está habilitado para o município de emissão",
+    ];
+
     private Certificate $certificate;
     private XmlSigner $signer;
     private SchemaValidator $schemaValidator;
@@ -47,39 +68,31 @@ class Tools
         $this->schemaValidator = new SchemaValidator(dirname(__DIR__) . '/Schemas');
         $this->logger = new Logger($logDir);
 
-        // Configura cliente HTTP REST (Guzzle)
-        // Nota: O Portal Nacional pode exigir autenticação adicional (token, etc.)
-        // Consulte a documentação oficial: https://www.nfse.gov.br/swagger/contribuintesissqn/
-
-        // Obtém o caminho do certificado PEM (contém certificado + chave privada)
-        $certPemPath = $this->certificate->getPemPath();
-        $certPassphrase = $this->certificate->getPassphrase();
-
-        // Configura o certificado SSL do cliente para mutual TLS
-        // O Guzzle aceita um arquivo PEM que contenha tanto o certificado quanto a chave privada
-        // Ou pode usar um array com 'cert', 'key' e 'passphrase'
-        // Como o arquivo PEM já contém ambos, usamos apenas 'cert'
-        // Mas se a chave tiver senha, precisamos usar o formato de array
-        $certConfig = $certPemPath;
-        if (!empty($certPassphrase)) {
-            // Se tiver senha, usa formato de array
-            $certConfig = [
-                $certPemPath, // Caminho do arquivo PEM (contém cert + key)
-                $certPassphrase // Senha da chave privada
-            ];
-        }
-
         $this->httpClient = new Client([
             'base_uri' => $this->config->getApiBaseUrl(),
             'timeout' => 60,
-            'verify' => $this->config->ambiente === 1, // Verifica SSL apenas em produção
-            'cert' => $certConfig, // Certificado do cliente para mutual TLS
+            'verify' => $this->config->verificarSsl,
+            'cert' => $this->certificadoCliente(), // mutual TLS com o certificado A1 da empresa
             'headers' => [
                 'Content-Type' => 'application/xml',
                 'Accept' => 'application/xml',
                 'User-Agent' => 'PHP-NFSe-Nacional/1.0',
             ],
         ]);
+    }
+
+    /**
+     * Certificado do cliente para o mutual TLS no formato do Guzzle: caminho do PEM (certificado +
+     * chave privada) ou [caminho, senha] quando a chave tem senha.
+     *
+     * @return string|array{0: string, 1: string}
+     */
+    private function certificadoCliente(): string|array
+    {
+        $pem = $this->certificate->getPemPath();
+        $senha = $this->certificate->getPassphrase();
+
+        return $senha === '' ? $pem : [$pem, $senha];
     }
 
     /**
@@ -162,7 +175,8 @@ class Tools
     /**
      * Consulta DPS pelo identificador para obter a chave de acesso da NFS-e gerada
      *
-     * @param string $idDps Identificador da DPS (42 dígitos: cLocEmi(7) + tipoInscricao(1) + CNPJ(14) + serie(5) + nDPS(15))
+     * @param string $idDps Identificador da DPS (42 dígitos:
+     *                      cLocEmi(7) + tipoInscricao(1) + CNPJ(14) + serie(5) + nDPS(15))
      * @return Response Response contendo a chave de acesso em response->dados['chaveAcesso']
      */
     public function consultarDps(string $idDps): Response
@@ -171,16 +185,11 @@ class Tools
             // GET /dps/{idDps} - retorna JSON com chaveAcesso
             $url = $this->config->getApiEndpoint('/dps/' . $idDps);
 
-            $certPemPath = $this->certificate->getPemPath();
-            $certPassphrase = $this->certificate->getPassphrase();
-            $certConfig = $certPemPath;
-            if (!empty($certPassphrase)) {
-                $certConfig = [$certPemPath, $certPassphrase];
-            }
+            $certConfig = $this->certificadoCliente();
 
             $response = $this->httpClient->request('GET', $url, [
                 RequestOptions::CERT => $certConfig,
-                RequestOptions::VERIFY => $this->config->ambiente === 1,
+                RequestOptions::VERIFY => $this->config->verificarSsl,
                 RequestOptions::HEADERS => [
                     'Accept' => 'application/json',
                 ],
@@ -190,12 +199,12 @@ class Tools
             $body = (string) $response->getBody();
 
             if ($statusCode >= 400) {
-                $jsonData = @json_decode($body, true);
+                $jsonData = json_decode($body, true);
                 $mensagemErro = $jsonData['mensagem'] ?? $jsonData['message'] ?? "Erro ao consultar DPS";
                 throw new CommunicationException("Erro ao consultar DPS: {$mensagemErro}", $statusCode);
             }
 
-            $jsonData = @json_decode($body, true);
+            $jsonData = json_decode($body, true);
             if (json_last_error() !== JSON_ERROR_NONE) {
                 throw new CommunicationException("Resposta da API não é um JSON válido");
             }
@@ -233,7 +242,7 @@ class Tools
     /**
      * Consulta NFS-e pela chave de acesso
      *
-     * @param string $chaveAcesso Chave de acesso da NFS-e (44 dígitos)
+     * @param string $chaveAcesso Chave de acesso da NFS-e (50 dígitos)
      * @return Response Response contendo o XML da NFS-e em response->xml
      */
     public function consultarNfsePorChave(string $chaveAcesso): Response
@@ -242,16 +251,11 @@ class Tools
             // GET /nfse/{chaveAcesso} - retorna JSON com nfseXmlGZipB64 ou XML direto
             $url = $this->config->getApiEndpoint('/nfse/' . $chaveAcesso);
 
-            $certPemPath = $this->certificate->getPemPath();
-            $certPassphrase = $this->certificate->getPassphrase();
-            $certConfig = $certPemPath;
-            if (!empty($certPassphrase)) {
-                $certConfig = [$certPemPath, $certPassphrase];
-            }
+            $certConfig = $this->certificadoCliente();
 
             $response = $this->httpClient->request('GET', $url, [
                 RequestOptions::CERT => $certConfig,
-                RequestOptions::VERIFY => $this->config->ambiente === 1,
+                RequestOptions::VERIFY => $this->config->verificarSsl,
                 RequestOptions::HEADERS => [
                     'Accept' => 'application/json, application/xml',
                 ],
@@ -261,7 +265,7 @@ class Tools
             $body = (string) $response->getBody();
 
             if ($statusCode >= 400) {
-                $jsonData = @json_decode($body, true);
+                $jsonData = json_decode($body, true);
                 $mensagemErro = $jsonData['mensagem'] ?? $jsonData['message'] ?? "Erro ao consultar NFS-e";
                 throw new CommunicationException("Erro ao consultar NFS-e: {$mensagemErro}", $statusCode);
             }
@@ -270,7 +274,7 @@ class Tools
             $xmlNfse = null;
             if (str_starts_with(trim($body), '{') || str_starts_with(trim($body), '[')) {
                 // É JSON - pode conter nfseXmlGZipB64
-                $jsonData = @json_decode($body, true);
+                $jsonData = json_decode($body, true);
                 if (json_last_error() === JSON_ERROR_NONE) {
                     if (isset($jsonData['nfseXmlGZipB64'])) {
                         // Descompactar GZIP e decodificar Base64
@@ -353,17 +357,12 @@ class Tools
             // GET /danfse/{chaveAcesso} - retorna PDF binário diretamente
             $url = $this->config->getApiEndpoint('/danfse/' . $chaveAcesso);
 
-            $certPemPath = $this->certificate->getPemPath();
-            $certPassphrase = $this->certificate->getPassphrase();
-            $certConfig = $certPemPath;
-            if (!empty($certPassphrase)) {
-                $certConfig = [$certPemPath, $certPassphrase];
-            }
+            $certConfig = $this->certificadoCliente();
 
             try {
                 $response = $this->httpClient->request('GET', $url, [
                     RequestOptions::CERT => $certConfig,
-                    RequestOptions::VERIFY => $this->config->ambiente === 1,
+                    RequestOptions::VERIFY => $this->config->verificarSsl,
                     RequestOptions::HEADERS => [
                         'Accept' => 'application/pdf',
                     ],
@@ -374,7 +373,7 @@ class Tools
                     throw $this->marcarDanfseIndisponivel("HTTP {$status}", $e);
                 }
 
-                $json = @json_decode((string) $e->getResponse()->getBody(), true);
+                $json = json_decode((string) $e->getResponse()->getBody(), true);
                 $detalhe = is_array($json) ? ($json['mensagem'] ?? $json['message'] ?? null) : null;
                 throw new CommunicationException(
                     'Erro ao baixar DANFSe: ' . ($detalhe ?? "HTTP {$status}"),
@@ -391,7 +390,7 @@ class Tools
 
             if ($statusCode >= 400) {
                 // Tentar extrair mensagem de erro se for JSON
-                $jsonData = @json_decode($body, true);
+                $jsonData = json_decode($body, true);
                 if (json_last_error() === JSON_ERROR_NONE && isset($jsonData['mensagem'])) {
                     $mensagemErro = $jsonData['mensagem'];
                 } elseif (json_last_error() === JSON_ERROR_NONE && isset($jsonData['message'])) {
@@ -406,12 +405,15 @@ class Tools
             // PDFs começam com %PDF
             if (!str_starts_with($body, '%PDF')) {
                 // Pode ser JSON com erro ou outro formato
-                $jsonData = @json_decode($body, true);
+                $jsonData = json_decode($body, true);
                 if (json_last_error() === JSON_ERROR_NONE) {
                     $mensagemErro = $jsonData['mensagem'] ?? $jsonData['message'] ?? "Resposta não é um PDF válido";
                     throw new CommunicationException("Erro ao baixar DANFSe: {$mensagemErro}");
                 } else {
-                    throw new CommunicationException("Resposta da API não é um PDF válido. Tipo de conteúdo: " . ($response->getHeader('Content-Type')[0] ?? 'desconhecido'));
+                    $tipoConteudo = $response->getHeader('Content-Type')[0] ?? 'desconhecido';
+                    throw new CommunicationException(
+                        "Resposta da API não é um PDF válido. Tipo de conteúdo: {$tipoConteudo}"
+                    );
                 }
             }
 
@@ -462,8 +464,12 @@ class Tools
      * @throws \InvalidArgumentException Se a API estiver indisponível e o XML não for informado
      * @throws \RuntimeException Se o gerador local não puder ser usado (mpdf ausente)
      */
-    public function obterDanfse(string $chaveAcesso, string $xmlNfse, array $dadosAdicionais = [], bool $canceled = false): array
-    {
+    public function obterDanfse(
+        string $chaveAcesso,
+        string $xmlNfse,
+        array $dadosAdicionais = [],
+        bool $canceled = false
+    ): array {
         try {
             return ['pdf' => $this->baixarDanfse($chaveAcesso), 'origem' => 'api'];
         } catch (DanfseIndisponivelException) {
@@ -496,6 +502,7 @@ class Tools
      * @param Response $response Response da NFSe emitida/consultada
      * @param array $dadosAdicionais Dados adicionais para o PDF (ex: prestador.razaoSocial)
      * @return string Conteúdo do PDF em binário
+     * @deprecated Usa o leiaute ABRASF (DanfseGenerator); para a NFS-e Nacional use obterDanfse().
      */
     public function gerarDanfse(Response $response, array $dadosAdicionais = []): string
     {
@@ -509,6 +516,7 @@ class Tools
      * @param Response $response Response da NFSe emitida/consultada
      * @param string $caminho Caminho completo do arquivo PDF
      * @param array $dadosAdicionais Dados adicionais para o PDF
+     * @deprecated Usa o leiaute ABRASF (DanfseGenerator); para a NFS-e Nacional use obterDanfse().
      */
     public function gerarDanfseArquivo(Response $response, string $caminho, array $dadosAdicionais = []): void
     {
@@ -522,6 +530,7 @@ class Tools
      * @param Response $response Response da NFSe emitida/consultada
      * @param array $dadosAdicionais Dados adicionais para o PDF
      * @return string PDF em base64
+     * @deprecated Usa o leiaute ABRASF (DanfseGenerator); para a NFS-e Nacional use obterDanfse().
      */
     public function gerarDanfseBase64(Response $response, array $dadosAdicionais = []): string
     {
@@ -549,19 +558,14 @@ class Tools
      */
     private function extractDpsNumber(string $xml): string
     {
-        try {
-            $simpleXml = @simplexml_load_string($xml);
-            if ($simpleXml !== false) {
-                $numeroNode = $simpleXml->xpath('//Numero');
-                if (!empty($numeroNode)) {
-                    return (string) $numeroNode[0];
-                }
-            }
-        } catch (Throwable) {
-            // Ignora erros de parsing
+        $dom = new \DOMDocument();
+        if (trim($xml) === '' || !@$dom->loadXML($xml)) {
+            return 'N/A';
         }
 
-        return 'N/A';
+        $numero = trim((string) (new \DOMXPath($dom))->evaluate('string(//*[local-name()="nDPS"][1])'));
+
+        return $numero !== '' ? $numero : 'N/A';
     }
 
     /**
@@ -570,7 +574,7 @@ class Tools
      * @param string $method Método HTTP (POST, GET, etc.)
      * @param string $endpoint Endpoint da API (ex: /nfse, /lote)
      * @param string $xml XML da requisição (DPS assinada)
-     * @return string XML da resposta
+     * @return array{xml: string, chaveAcesso: string|null} XML da resposta e chave de acesso (se vier no JSON)
      */
     private function callRest(string $method, string $endpoint, string $xml, bool $useGzipBase64 = false): array
     {
@@ -581,12 +585,7 @@ class Tools
 
         try {
             // Garante que o certificado está sendo usado na requisição
-            $certPemPath = $this->certificate->getPemPath();
-            $certPassphrase = $this->certificate->getPassphrase();
-            $certConfig = $certPemPath;
-            if (!empty($certPassphrase)) {
-                $certConfig = [$certPemPath, $certPassphrase];
-            }
+            $certConfig = $this->certificadoCliente();
 
             // A API do Portal Nacional espera JSON com XML compactado em GZIP e codificado em Base64
             // Especificamente para o endpoint /nfse (envio de DPS)
@@ -617,8 +616,8 @@ class Tools
                     'Content-Type' => 'application/json',
                     'Accept' => 'application/json, application/xml',
                 ],
-                RequestOptions::CERT => $certConfig, // Garante que o certificado é enviado
-                RequestOptions::VERIFY => $this->config->ambiente === 1, // Verifica SSL apenas em produção
+                RequestOptions::CERT => $certConfig,
+                RequestOptions::VERIFY => $this->config->verificarSsl,
             ]);
 
             $statusCode = $response->getStatusCode();
@@ -651,7 +650,8 @@ class Tools
                     } elseif (isset($jsonData['data'])) {
                         $body = is_string($jsonData['data']) ? $jsonData['data'] : json_encode($jsonData['data']);
                     } elseif (isset($jsonData['response'])) {
-                        $body = is_string($jsonData['response']) ? $jsonData['response'] : json_encode($jsonData['response']);
+                        $resposta = $jsonData['response'];
+                        $body = is_string($resposta) ? $resposta : json_encode($resposta);
                     }
                 } else {
                     $jsonData = null;
@@ -670,7 +670,7 @@ class Tools
                 $mensagemErro = '';
 
                 // Se a resposta for JSON, tenta extrair mensagem
-                $jsonData = @json_decode($body, true);
+                $jsonData = json_decode($body, true);
                 if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
                     // Procura por campos comuns de erro em JSON
                     if (isset($jsonData['mensagem'])) {
@@ -678,63 +678,16 @@ class Tools
                     } elseif (isset($jsonData['message'])) {
                         $mensagemErro = $jsonData['message'];
                     } elseif (isset($jsonData['erro'])) {
-                        $mensagemErro = is_string($jsonData['erro']) ? $jsonData['erro'] : json_encode($jsonData['erro']);
+                        $mensagemErro = is_string($jsonData['erro'])
+                            ? $jsonData['erro']
+                            : json_encode($jsonData['erro']);
                     } elseif (isset($jsonData['erros']) && is_array($jsonData['erros'])) {
-                        // Extrai erros do array e exibe apenas códigos/descrições para o usuário
-                        $erros = [];
-                        $temErrosEstruturados = false;
-                        foreach ($jsonData['erros'] as $erro) {
-                            $codigo = $erro['Codigo'] ?? '';
-                            $descricao = $erro['Descricao'] ?? '';
-                            $complemento = $erro['Complemento'] ?? '';
-
-                            $erroFormatado = $codigo ? "[{$codigo}] " : '';
-                            $erroFormatado .= $descricao;
-                            if ($complemento) {
-                                $erroFormatado .= ' - ' . $complemento;
-                            }
-
-                            // Mensagens específicas para erros comuns
-                            if ($codigo === 'E0715') {
-                                $erroFormatado .= "\n\nIMPORTANTE: Erro de validação do certificado digital.";
-                                $erroFormatado .= "\nPossíveis causas:";
-                                $erroFormatado .= "\n1. Certificado revogado ou expirado";
-                                $erroFormatado .= "\n2. Servidor de revogação do Portal Nacional temporariamente offline";
-                                $erroFormatado .= "\n3. Cadeia de certificação incompleta";
-                                $erroFormatado .= "\n\nSoluções:";
-                                $erroFormatado .= "\n- Verifique se o certificado está válido e não expirado";
-                                $erroFormatado .= "\n- Aguarde alguns minutos e tente novamente (pode ser problema temporário)";
-                                $erroFormatado .= "\n- Verifique se o certificado está configurado corretamente";
-                                $erroFormatado .= "\n- Entre em contato com a autoridade certificadora se o problema persistir";
-                            } elseif ($codigo === 'E0310') {
-                                $erroFormatado .= "\n\nIMPORTANTE: O código de tributação nacional informado não existe na lista oficial do Portal Nacional.";
-                                $erroFormatado .= "\nVerifique:";
-                                $erroFormatado .= "\n1. Se o código LC116 está correto e ativo";
-                                $erroFormatado .= "\n2. Se o código está na lista oficial do Portal Nacional";
-                                $erroFormatado .= "\n3. Se o código está habilitado para o município de emissão";
-                            } elseif ($codigo === 'RNG9997') {
-                                // Extrair informações do erro de schema
-                                $mensagemDetalhada = $this->extrairErroSchema($complemento ?: $descricao);
-                                if ($mensagemDetalhada) {
-                                    $erroFormatado = $codigo ? "[{$codigo}] " : '';
-                                    $erroFormatado .= $mensagemDetalhada;
-                                }
-                            }
-                            $erros[] = $erroFormatado;
-                            if (!empty($codigo) || !empty($descricao)) {
-                                $temErrosEstruturados = true;
-                            }
-                        }
-                        if ($temErrosEstruturados) {
-                            // Quando há erros estruturados, retorna apenas a mensagem limpa
-                            $mensagemErro = "Resposta da API: " . implode("\n", $erros);
-                        } else {
-                            // Se não houver código/descrição, mantém comportamento antigo
-                            $mensagemErro = implode("\n", $erros);
-                            $mensagemErro .= "\n\nResposta da API: " . json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                        }
+                        $erros = $this->formatarErrosApi($jsonData['erros'], true);
+                        $mensagemErro = $erros['estruturado']
+                            ? 'Resposta da API: ' . $erros['texto']
+                            : $erros['texto'] . "\n\nResposta da API: " . $this->jsonLegivel($jsonData);
                     } else {
-                        $mensagemErro = json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                        $mensagemErro = $this->jsonLegivel($jsonData);
                     }
                 } else {
                     // Tenta extrair mensagem de erro do XML
@@ -749,7 +702,7 @@ class Tools
 
                 // Se a mensagem de erro já contém "Resposta da API:" (erros estruturados),
                 // retorna apenas essa parte limpa, sem detalhes técnicos
-                if (strpos($mensagemErro, 'Resposta da API:') !== false) {
+                if (str_contains($mensagemErro, 'Resposta da API:')) {
                     throw new CommunicationException($mensagemErro, $statusCode);
                 }
 
@@ -763,7 +716,7 @@ class Tools
 
             // Retornar XML e chave de acesso (se disponível) para buildResponse
             return ['xml' => $body, 'chaveAcesso' => $chaveAcessoJson];
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
+        } catch (RequestException $e) {
             $mensagem = sprintf(
                 'Falha na comunicação com a API (%s): %s',
                 $this->config->ambienteNome(),
@@ -780,48 +733,20 @@ class Tools
 
                 if (!empty($body)) {
                     // Tenta decodificar JSON primeiro
-                    $jsonData = @json_decode($body, true);
+                    $jsonData = json_decode($body, true);
                     if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
                         // Extrai mensagens de erro do JSON
                         if (isset($jsonData['erros']) && is_array($jsonData['erros'])) {
-                            $erros = [];
-                            $temErrosEstruturados = false;
-                            foreach ($jsonData['erros'] as $erro) {
-                                $codigo = $erro['Codigo'] ?? '';
-                                $descricao = $erro['Descricao'] ?? '';
-                                $complemento = $erro['Complemento'] ?? '';
-
-                                $erroFormatado = $codigo ? "[{$codigo}] " : '';
-                                $erroFormatado .= $descricao;
-                                if ($complemento) {
-                                    $erroFormatado .= ' - ' . $complemento;
-                                }
-
-                                // Mensagens específicas para erros comuns
-                                if ($codigo === 'RNG9997') {
-                                    // Extrair informações do erro de schema
-                                    $mensagemDetalhada = $this->extrairErroSchema($complemento ?: $descricao);
-                                    if ($mensagemDetalhada) {
-                                        $erroFormatado = $codigo ? "[{$codigo}] " : '';
-                                        $erroFormatado .= $mensagemDetalhada;
-                                    }
-                                }
-
-                                $erros[] = $erroFormatado;
-                                if (!empty($codigo) || !empty($descricao)) {
-                                    $temErrosEstruturados = true;
-                                }
-                            }
-                            if ($temErrosEstruturados) {
-                                // Quando há erros estruturados, retorna apenas a mensagem limpa
-                                $mensagem = "Resposta da API: " . implode("\n", $erros);
+                            $erros = $this->formatarErrosApi($jsonData['erros']);
+                            if ($erros['estruturado']) {
+                                // Erros estruturados: só a mensagem limpa, sem detalhes técnicos
+                                $mensagem = 'Resposta da API: ' . $erros['texto'];
                             } else {
-                                $mensagem .= "\nResposta da API: " . implode("\n", $erros);
-                                $mensagem .= "\n\nResposta completa da API:\n" . json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                                $mensagem .= "\nResposta da API: " . $erros['texto'];
+                                $mensagem .= "\n\nResposta completa da API:\n" . $this->jsonLegivel($jsonData);
                             }
                         } else {
-                            // Mostra o JSON completo formatado
-                            $mensagem .= "\nResposta da API: " . json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                            $mensagem .= "\nResposta da API: " . $this->jsonLegivel($jsonData);
                         }
                     } else {
                         // Se não for JSON, tenta extrair mensagem de erro do XML
@@ -837,7 +762,7 @@ class Tools
 
             // Se a mensagem já contém "Resposta da API:" (erros estruturados),
             // retorna apenas essa parte limpa, sem detalhes técnicos
-            if (strpos($mensagem, 'Resposta da API:') !== false && strpos($mensagem, 'Falha na comunicação') === false) {
+            if (str_contains($mensagem, 'Resposta da API:') && !str_contains($mensagem, 'Falha na comunicação')) {
                 throw new CommunicationException($mensagem, (int) ($e->getCode() ?: 500), $e);
             }
 
@@ -1037,15 +962,16 @@ class Tools
      *
      * O XML do evento segue o padrão do SPED para eventos de NFS-e
      *
-     * O Id do pedRegEvento é "PRE" + chave(50) + "101101" (59 caracteres); $nPedRegEvento
-     * não compõe o Id (a SEFIN rejeita 62 caracteres com E1235) e é mantido só por compatibilidade.
+     * O Id do pedRegEvento é "PRE" + chave(50) + "101101" (59 caracteres).
      *
-     * @return array ['xml' => string, 'idEvento' => string]
+     * @return array{xml: string, idEvento: string}
      */
-    private function gerarXmlEventoCancelamento(string $chaveAcesso, string $motivo, int $cMotivo = 2, int $nPedRegEvento = 1): array
+    private function gerarXmlEventoCancelamento(string $chaveAcesso, string $motivo, int $cMotivo = 2): array
     {
         if (strlen($chaveAcesso) !== 50 || !ctype_digit($chaveAcesso)) {
-            throw new ValidationException('A chave de acesso deve conter exatamente 50 dígitos numéricos para eventos da NFS-e Nacional.');
+            throw new ValidationException(
+                'A chave de acesso deve conter exatamente 50 dígitos numéricos para eventos da NFS-e Nacional.'
+            );
         }
 
         if (!in_array($cMotivo, [1, 2, 9], true)) {
@@ -1129,12 +1055,7 @@ class Tools
         $xmlOriginal = $xml;
 
         try {
-            $certPemPath = $this->certificate->getPemPath();
-            $certPassphrase = $this->certificate->getPassphrase();
-            $certConfig = $certPemPath;
-            if (!empty($certPassphrase)) {
-                $certConfig = [$certPemPath, $certPassphrase];
-            }
+            $certConfig = $this->certificadoCliente();
 
             // 1) Compactar XML em GZIP (nível 9 = máxima compressão)
             $gzipData = gzencode($xml, 9);
@@ -1168,7 +1089,7 @@ class Tools
                     'Accept' => 'application/json, application/xml',
                 ],
                 RequestOptions::CERT => $certConfig,
-                RequestOptions::VERIFY => $this->config->ambiente === 1,
+                RequestOptions::VERIFY => $this->config->verificarSsl,
             ]);
 
             $statusCode = $response->getStatusCode();
@@ -1177,7 +1098,7 @@ class Tools
             // Se status não for 2xx, trata como erro
             if ($statusCode >= 400) {
                 $mensagemErro = '';
-                $jsonData = @json_decode($body, true);
+                $jsonData = json_decode($body, true);
 
                 if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
                     if (isset($jsonData['mensagem'])) {
@@ -1185,31 +1106,10 @@ class Tools
                     } elseif (isset($jsonData['message'])) {
                         $mensagemErro = $jsonData['message'];
                     } elseif (isset($jsonData['erros']) && is_array($jsonData['erros'])) {
-                        $erros = [];
-                        $temErrosEstruturados = false;
-                        foreach ($jsonData['erros'] as $erro) {
-                            $codigo = $erro['Codigo'] ?? '';
-                            $descricao = $erro['Descricao'] ?? '';
-                            $complemento = $erro['Complemento'] ?? '';
-
-                            $linha = $codigo ? "[{$codigo}] " : '';
-                            $linha .= $descricao;
-                            if ($complemento) {
-                                $linha .= ' - ' . $complemento;
-                            }
-                            $erros[] = $linha;
-                            if (!empty($codigo) || !empty($descricao)) {
-                                $temErrosEstruturados = true;
-                            }
-                        }
-                        if ($temErrosEstruturados) {
-                            // Quando há erros estruturados, retorna apenas a mensagem limpa
-                            $mensagemErro = "Resposta da API: " . implode("\n", $erros);
-                        } else {
-                            $mensagemErro = implode("\n", $erros);
-                        }
+                        $erros = $this->formatarErrosApi($jsonData['erros']);
+                        $mensagemErro = ($erros['estruturado'] ? 'Resposta da API: ' : '') . $erros['texto'];
                     } else {
-                        $mensagemErro = json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+                        $mensagemErro = $this->jsonLegivel($jsonData);
                     }
                 } else {
                     $mensagemErro = substr($body, 0, 1000);
@@ -1217,7 +1117,7 @@ class Tools
 
                 // Se a mensagem de erro já contém "Resposta da API:" (erros estruturados),
                 // retorna apenas essa parte limpa, sem detalhes técnicos
-                if (strpos($mensagemErro, 'Resposta da API:') !== false) {
+                if (str_contains($mensagemErro, 'Resposta da API:')) {
                     throw new CommunicationException($mensagemErro, $statusCode);
                 }
 
@@ -1237,7 +1137,7 @@ class Tools
              * - Se vier XML puro, retorna direto
              */
             $conteudoXml = $body;
-            $jsonData = @json_decode($body, true);
+            $jsonData = json_decode($body, true);
 
             if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
                 if (isset($jsonData['eventoXmlGZipB64'])) {
@@ -1256,82 +1156,73 @@ class Tools
             }
 
             return ['xml' => $conteudoXml, 'chaveAcesso' => null];
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            $mensagem = '';
+        } catch (RequestException $e) {
+            $codigoErro = (int) ($e->getCode() ?: 500);
+            $resposta = $e->getResponse();
+            $corpo = $resposta !== null ? (string) $resposta->getBody() : '';
 
-            if ($e->hasResponse()) {
-                $response = $e->getResponse();
-                $statusCode = $response->getStatusCode();
-                $body = (string) $response->getBody();
-
-                // Tenta decodificar JSON primeiro
-                $jsonData = @json_decode($body, true);
-                if (json_last_error() === JSON_ERROR_NONE && is_array($jsonData)) {
-                    // Extrai mensagens de erro do JSON
-                    if (isset($jsonData['erros']) && is_array($jsonData['erros'])) {
-                        $erros = [];
-                        $temErrosEstruturados = false;
-                        foreach ($jsonData['erros'] as $erro) {
-                            $codigo = $erro['Codigo'] ?? '';
-                            $descricao = $erro['Descricao'] ?? '';
-                            $complemento = $erro['Complemento'] ?? '';
-
-                            $linha = $codigo ? "[{$codigo}] " : '';
-                            $linha .= $descricao;
-                            if ($complemento) {
-                                $linha .= ' - ' . $complemento;
-                            }
-                            $erros[] = $linha;
-                            if (!empty($codigo) || !empty($descricao)) {
-                                $temErrosEstruturados = true;
-                            }
-                        }
-                        if ($temErrosEstruturados) {
-                            // Quando há erros estruturados, retorna apenas a mensagem limpa
-                            $mensagem = "Resposta da API: " . implode("\n", $erros);
-                        } else {
-                            $mensagem = sprintf(
-                                'Falha na comunicação com a API de Eventos (%s): %s',
-                                $this->config->ambienteNome(),
-                                $e->getMessage()
-                            );
-                            $mensagem .= "\nHTTP Status: {$statusCode}\nURL: {$url}\nResposta: {$body}";
-                        }
-                    } else {
-                        $mensagem = sprintf(
-                            'Falha na comunicação com a API de Eventos (%s): %s',
-                            $this->config->ambienteNome(),
-                            $e->getMessage()
-                        );
-                        $mensagem .= "\nHTTP Status: {$statusCode}\nURL: {$url}\nResposta: {$body}";
-                    }
-                } else {
-                    $mensagem = sprintf(
-                        'Falha na comunicação com a API de Eventos (%s): %s',
-                        $this->config->ambienteNome(),
-                        $e->getMessage()
-                    );
-                    $mensagem .= "\nHTTP Status: {$statusCode}\nURL: {$url}\nResposta: {$body}";
+            $json = json_decode($corpo, true);
+            if (is_array($json) && isset($json['erros']) && is_array($json['erros'])) {
+                $erros = $this->formatarErrosApi($json['erros']);
+                if ($erros['estruturado']) {
+                    // Erros estruturados: só a mensagem limpa, sem detalhes técnicos
+                    throw new CommunicationException('Resposta da API: ' . $erros['texto'], $codigoErro, $e);
                 }
-            } else {
-                $mensagem = sprintf(
-                    'Falha na comunicação com a API de Eventos (%s): %s',
-                    $this->config->ambienteNome(),
-                    $e->getMessage()
-                );
             }
 
-            // Se a mensagem já contém "Resposta da API:" (erros estruturados),
-            // retorna apenas essa parte limpa, sem detalhes técnicos
-            if (strpos($mensagem, 'Resposta da API:') !== false) {
-                throw new CommunicationException($mensagem, (int)($e->getCode() ?: 500), $e);
+            $mensagem = sprintf(
+                'Falha na comunicação com a API de Eventos (%s): %s',
+                $this->config->ambienteNome(),
+                $e->getMessage()
+            );
+            if ($resposta !== null) {
+                $mensagem .= "\nHTTP Status: {$resposta->getStatusCode()}\nURL: {$url}\nResposta: {$corpo}";
             }
+            $mensagem .= "\n\n=== XML ENVIADO (antes do GZIP) ===\n" . $this->formatXml($xmlOriginal);
 
-            // Para outros tipos de erro, adiciona detalhes técnicos
-            $xmlFormatado = $this->formatXml($xmlOriginal);
-            $mensagem .= "\n\n=== XML ENVIADO (antes do GZIP) ===\n" . $xmlFormatado;
-
-            throw new CommunicationException($mensagem, (int)($e->getCode() ?: 500), $e);
+            throw new CommunicationException($mensagem, $codigoErro, $e);
         }
+    }
+
+    /**
+     * Formata a lista "erros" devolvida pela API ([{Codigo, Descricao, Complemento}, ...]), uma linha por erro.
+     *
+     * @param array<mixed> $erros
+     * @param bool $comOrientacoes Acrescenta orientações para erros comuns (certificado, código de tributação)
+     * @return array{texto: string, estruturado: bool} estruturado = algum erro tem código ou descrição
+     */
+    private function formatarErrosApi(array $erros, bool $comOrientacoes = false): array
+    {
+        $linhas = [];
+        $estruturado = false;
+        foreach ($erros as $erro) {
+            $erro = is_array($erro) ? $erro : [];
+            $codigo = (string) ($erro['Codigo'] ?? '');
+            $descricao = (string) ($erro['Descricao'] ?? '');
+            $complemento = (string) ($erro['Complemento'] ?? '');
+
+            if ($codigo === 'RNG9997') {
+                $linha = "[{$codigo}] " . $this->extrairErroSchema($complemento ?: $descricao);
+            } else {
+                $linha = ($codigo !== '' ? "[{$codigo}] " : '') . $descricao;
+                if ($complemento !== '') {
+                    $linha .= ' - ' . $complemento;
+                }
+                if ($comOrientacoes) {
+                    $linha .= self::ORIENTACOES_ERRO[$codigo] ?? '';
+                }
+            }
+
+            $linhas[] = $linha;
+            $estruturado = $estruturado || $codigo !== '' || $descricao !== '';
+        }
+
+        return ['texto' => implode("\n", $linhas), 'estruturado' => $estruturado];
+    }
+
+    /** JSON identado e legível para mensagens de erro. */
+    private function jsonLegivel(mixed $dados): string
+    {
+        return (string) json_encode($dados, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 }

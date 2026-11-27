@@ -1,0 +1,9 @@
+parameters:
+    level: 5
+    paths:
+        - src
+    ignoreErrors:
+        # O PHPDoc do xmlseclibs declara DOMDocument, mas addReference() aceita (e usa) DOMElement
+        -
+            message: '#XMLSecurityDSig::addReference\(\) expects DOMDocument, DOMElement given#'
+            path: src/Security/XmlSigner.php

@@ -455,7 +455,8 @@ class Make
             $erros[] = 'Dados do prestador não informados';
         } elseif ($this->tpEmit !== 1 && trim((string) ($this->prestador['razaoSocial'] ?? '')) === '') {
             // Com tpEmit = 1 o nome não é enviado (SEFIN E0121); nos demais casos é necessário.
-            $erros[] = 'Razão social do prestador é obrigatória quando o emitente não é o prestador (tpEmit diferente de 1)';
+            $erros[] = 'Razão social do prestador é obrigatória quando o emitente não é o prestador'
+                . ' (tpEmit diferente de 1)';
         }
         if (empty($this->tomador)) {
             $erros[] = 'Dados do tomador não informados';

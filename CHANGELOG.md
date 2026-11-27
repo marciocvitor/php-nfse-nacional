@@ -17,6 +17,26 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   - **Dados lidos do XML autorizado:** município de `infNFSe/xLocEmi` e UF de `infNFSe/emit/enderNac/UF`; Ambiente Gerador de `infNFSe/ambGer`; Tipo de Ambiente de `infDPS/tpAmb`. O que não vier no XML aparece como "-". A versão "v2.0" é a do leiaute do DANFSe reproduzido (o XML só traz `versao="1.01"`, que é a do esquema da NFS-e, e não é exibida).
 - **Rodapé no padrão do portal nacional**, fixo no fim da página: faixa com "DATA CIENTIFICAÇÃO:", "IDENTIFICAÇÃO E ASSINATURA" e "Nº NFS-e / CHAVE NFS-e". Substitui os textos antigos de código de verificação e de representação gráfica.
 - **Informações complementares** passam a trazer a linha "Totais aproximados dos Tributos cfe. Lei n° 12.741/2012: Federais; Estaduais; Municipais" (valores de `vTotTrib` da DPS quando informados, "-" quando não).
+- Opção `verificarSsl` em `Config` (padrão `true`).
+- `phpcs.xml.dist`, `phpstan.neon.dist` e `.gitattributes` (fim de linha LF e pacote do Composer sem testes/exemplos).
+
+### Alterado
+
+- **Verificação TLS ligada também em homologação.** Antes o certificado do servidor só era verificado em produção. Para desligar (apenas depuração), use `'verificarSsl' => false`.
+- **Nome do município do prestador vem do próprio XML** (`xLocEmi`, `xLocPrestacao` ou `xLocIncid` com o mesmo código IBGE); sem nome no XML, mostra o código IBGE e a UF. O gerador não depende mais da classe `Db_conn` do ERP nem de consulta SQL.
+- `DanfseGeneratorNacional` cria um mPDF novo a cada `gerar()`: a mesma instância pode gerar vários PDFs (antes o mPDF do construtor era reaproveitado entre chamadas).
+- Rótulo "Descrição do Serviço" no quadro do serviço.
+- `composer.json` declara as extensões usadas (`ext-zlib`, `ext-gd`, `ext-mbstring`) e exige `squizlabs/php_codesniffer` ^3.13.6 (CVE-2026-67434 nas anteriores).
+- CI falha quando testes, PHPStan ou PSR-12 falham (antes os passos tinham `continue-on-error`).
+- `DanfseGenerator` (leiaute ABRASF) e `Tools::gerarDanfse()`, `gerarDanfseArquivo()` e `gerarDanfseBase64()` marcados como `@deprecated`; para a NFS-e Nacional use `Tools::obterDanfse()`.
+
+### Corrigido
+
+- **Valores do XML escapados no HTML do DANFSe.** Nomes, endereços e descrição do serviço com `<`, `>` ou `&` eram inseridos crus no HTML do mPDF (podiam quebrar o leiaute ou fazer o mPDF buscar recursos externos).
+- Número da DPS no log de emissão lido de `nDPS` (antes procurava a tag ABRASF `Numero` e registrava sempre "N/A").
+- Mensagens de erro estruturadas da API de eventos: o erro de schema `RNG9997` ganha a mesma explicação legível já usada na emissão.
+- Arquivo PEM temporário criado com permissão `0600`; `DanfseGenerator::gerarArquivo()` lança exceção quando não consegue gravar.
+- Código morto e comentários obsoletos removidos do gerador do DANFSe; formatação PSR-12 em todo o código.
 
 ---
 

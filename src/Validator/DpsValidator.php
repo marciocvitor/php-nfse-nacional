@@ -173,7 +173,10 @@ class DpsValidator
         $pAliq = null;
         $aliquotaInformada = $servico['pAliq'] ?? $servico['aliquota'] ?? null;
         if ($aliquotaInformada !== null && $aliquotaInformada !== '') {
-            if (!is_numeric($aliquotaInformada) || (float) $aliquotaInformada < 0 || (float) $aliquotaInformada > 9.99) {
+            $aliquotaForaDaFaixa = !is_numeric($aliquotaInformada)
+                || (float) $aliquotaInformada < 0
+                || (float) $aliquotaInformada > 9.99;
+            if ($aliquotaForaDaFaixa) {
                 $errors[] = 'Alíquota do ISS (pAliq) deve ser numérica, entre 0 e 9,99';
             } else {
                 $pAliq = number_format(round((float) $aliquotaInformada, 2), 2, '.', '');

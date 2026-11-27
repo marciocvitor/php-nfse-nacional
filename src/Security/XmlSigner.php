@@ -11,6 +11,10 @@ use RobRichards\XMLSecLibs\XMLSecurityKey;
 
 class XmlSigner
 {
+    /** Elemento com Id/id de DPS, evento ou pedido (%1$s = nome do atributo). */
+    private const XPATH_ID_ASSINAVEL = '//*[starts-with(@%1$s, "DPS") or starts-with(@%1$s, "Evt")'
+        . ' or starts-with(@%1$s, "ID") or starts-with(@%1$s, "PRE") or string-length(@%1$s) >= 50]';
+
     public function __construct(private readonly Certificate $certificate)
     {
     }
@@ -28,6 +32,9 @@ class XmlSigner
         // Buscar o elemento para referenciar na assinatura
         $elementToSign = null;
         if ($referenceId !== null) {
+            if (str_contains($referenceId, '"')) {
+                throw new ValidationException('Id de referência inválido para assinatura.');
+            }
             // Buscar por ID em qualquer namespace (tentar tanto Id maiúsculo quanto id minúsculo)
             $elementToSign = $xpath->query(sprintf('//*[@Id="%s"]', $referenceId))->item(0);
             if (!$elementToSign instanceof \DOMElement) {
@@ -35,10 +42,9 @@ class XmlSigner
             }
         } else {
             // Estratégia: buscar por ID primeiro (mais confiável), depois por nome da tag
-            // Buscar por qualquer elemento com atributo Id/id que comece com "DPS", "Evt", "ID", "PRE" ou números (para eventos NFS-e)
-            $elementToSign = $xpath->query('//*[starts-with(@Id, "DPS") or starts-with(@Id, "Evt") or starts-with(@Id, "ID") or starts-with(@Id, "PRE") or string-length(@Id) >= 50]')->item(0);
+            $elementToSign = $xpath->query(sprintf(self::XPATH_ID_ASSINAVEL, 'Id'))->item(0);
             if (!$elementToSign instanceof \DOMElement) {
-                $elementToSign = $xpath->query('//*[starts-with(@id, "DPS") or starts-with(@id, "Evt") or starts-with(@id, "ID") or starts-with(@id, "PRE") or string-length(@id) >= 50]')->item(0);
+                $elementToSign = $xpath->query(sprintf(self::XPATH_ID_ASSINAVEL, 'id'))->item(0);
             }
 
             // Se não encontrar por ID, tentar por nome da tag usando XPath (funciona com namespaces)
@@ -92,7 +98,10 @@ class XmlSigner
         }
 
         if (!$elementToSign instanceof \DOMElement) {
-            throw new ValidationException(sprintf('Tag "%s" (ou variações infDPS/infDps/infEvento) não encontrada para assinatura.', $tagName));
+            throw new ValidationException(sprintf(
+                'Tag "%s" (ou variações infDPS/infDps/infEvento) não encontrada para assinatura.',
+                $tagName
+            ));
         }
 
         // Buscar o elemento raiz (pode ser NFSe ou DPS)
