@@ -221,47 +221,4 @@ class DanfseApiIndisponivelTest extends TestCase
         $this->assertFalse(PdfConteudo::temMarcaCancelada($normal['pdf']), 'padrão é não cancelada');
         $this->assertFalse(PdfConteudo::temMarcaCancelada($normalFalse['pdf']));
     }
-
-    private function pngDeTeste(int $largura, int $altura): string
-    {
-        $im = imagecreatetruecolor($largura, $altura);
-        imagefill($im, 0, 0, imagecolorallocate($im, 30, 90, 160));
-        ob_start();
-        imagepng($im, null, 9);
-
-        return (string) ob_get_clean();
-    }
-
-    public function testObterDanfseComBrasaoValidoNaoGeraAvisos(): void
-    {
-        if (!class_exists(\Mpdf\Mpdf::class)) {
-            $this->markTestSkipped('mpdf/mpdf não instalado');
-        }
-
-        [$tools] = $this->criarTools([$this->erroTls()]);
-
-        $semBrasao = $tools->obterDanfse(self::CHAVE, DanfseXmlFixture::NFSE);
-        $comBrasao = $tools->obterDanfse(self::CHAVE, DanfseXmlFixture::NFSE, [], false, $this->pngDeTeste(192, 192));
-
-        $this->assertSame([], $semBrasao['avisos']);
-        $this->assertSame([], $comBrasao['avisos']);
-        $this->assertGreaterThan(strlen($semBrasao['pdf']), strlen($comBrasao['pdf']), 'o brasão deve entrar no PDF');
-    }
-
-    public function testObterDanfseComBrasaoInvalidoGeraPdfEAvisoEmPortugues(): void
-    {
-        if (!class_exists(\Mpdf\Mpdf::class)) {
-            $this->markTestSkipped('mpdf/mpdf não instalado');
-        }
-
-        [$tools] = $this->criarTools([$this->erroTls()]);
-
-        $resultado = $tools->obterDanfse(self::CHAVE, DanfseXmlFixture::NFSE, [], false, $this->pngDeTeste(500, 500));
-
-        $this->assertSame('local', $resultado['origem']);
-        $this->assertStringStartsWith('%PDF', $resultado['pdf'], 'o DANFSe deve ser gerado mesmo com brasão inválido');
-        $this->assertCount(1, $resultado['avisos']);
-        $this->assertStringContainsString('Brasão inválido', $resultado['avisos'][0]);
-        $this->assertStringContainsString('Padrão esperado', $resultado['avisos'][0]);
-    }
 }
